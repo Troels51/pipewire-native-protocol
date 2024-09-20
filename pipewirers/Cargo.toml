@@ -1,0 +1,11 @@
+[package]
+name = "pipewirers"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bitfield-struct = "0.8.0"
+tokio.workspace = true
+zerocopy = { version = "0.7.35", features = ["derive"] }

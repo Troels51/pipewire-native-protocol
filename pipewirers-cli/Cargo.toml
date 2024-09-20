@@ -1,0 +1,10 @@
+[package]
+name = "pipewirers-cli"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+pipewirers = { path = "../pipewirers"}
+tokio = { workspace = true, features = ["net", "macros", "rt", "rt-multi-thread"] }

@@ -1,0 +1,18 @@
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+description = "A pure rust pipewire client library"
+repository = "https://github.com/troels51/pipewirers"
+license = "MIT"
+authors = ["Troels Hoffmeyer <troels.d.hoffmeyer@gmail.com>"]
+rust-version = "1.75"
+
+[workspace]
+members = [
+    "pipewirers",
+    "pipewirers-cli",
+]
+resolver = "2"
+
+[workspace.dependencies]
+tokio = { version = "1.40.0", features = ["net"] }
