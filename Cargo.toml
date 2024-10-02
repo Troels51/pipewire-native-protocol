@@ -10,6 +10,7 @@ rust-version = "1.75"
 [workspace]
 members = [
     "pipewirers",
+    "spa",
     "pipewirers-cli",
 ]
 resolver = "2"

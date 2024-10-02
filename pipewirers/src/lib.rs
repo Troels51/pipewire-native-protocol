@@ -1,7 +1,3 @@
-use bitfield_struct::bitfield;
-use zerocopy::AsBytes;
-mod spa_pods;
-
 pub struct PipewireClient {
     stream: tokio::net::UnixStream,
     seq: u32,
@@ -18,7 +14,7 @@ impl PipewireClient {
     }
 
     async fn hello(&self, version: i32) {
-        let message = HelloMessage::new(version, self.seq);
+        // let message = HelloMessage::new(version, self.seq);
         // self.stream.try_write(message.into());
     }
 
@@ -28,7 +24,6 @@ impl PipewireClient {
 }
 
 // Messages
-#[derive(AsBytes)]
 #[repr(C)]
 struct Header {
     id: u32,
@@ -48,38 +43,43 @@ impl Header {
     }
 }
 
-#[repr(C)]
-#[derive(AsBytes)]
-struct HelloMessage {
+struct Message {
     header: Header,
-    payload_pod: spa_pods::Int, // No, It is struct of int
+    payload: spa::value::Value,
 }
 
-impl HelloMessage {
-    fn new(version: i32, seq: u32) -> Self {
-        let payload = spa_pods::Int::new(version);
-        let header = Header::new(
-            0,
-            1,
-            core::mem::size_of_val::<spa_pods::Int>(&payload)
-                .try_into()
-                .unwrap(),
-            seq,
-            0,
-        );
-        Self {
-            header: header,
-            payload_pod: payload,
-        }
-    }
-}
+// #[repr(C)]
+// #[derive(AsBytes)]
+// struct HelloMessage {
+//     header: Header,
+//     payload_pod: spa_pods::Int, // No, It is struct of int
+// }
 
-#[repr(C)]
-#[derive(AsBytes)]
-struct UpdatePropertiesMessage {
-    header: Header,
-    payload_pod: spa_pods::Int,
-}
+// impl HelloMessage {
+//     fn new(version: i32, seq: u32) -> Self {
+//         let payload = spa_pods::Int::new(version);
+//         let header = Header::new(
+//             0,
+//             1,
+//             core::mem::size_of_val::<spa_pods::Int>(&payload)
+//                 .try_into()
+//                 .unwrap(),
+//             seq,
+//             0,
+//         );
+//         Self {
+//             header: header,
+//             payload_pod: payload,
+//         }
+//     }
+// }
+
+// #[repr(C)]
+// #[derive(AsBytes)]
+// struct UpdatePropertiesMessage {
+//     header: Header,
+//     payload_pod: spa_pods::Int,
+// }
 // trait SPAPod {
 
 // }
