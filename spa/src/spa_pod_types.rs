@@ -1,3 +1,6 @@
+/// Constants for different spa pod types
+/// https://docs.pipewire.org/page_spa_pod.html
+
 pub(crate) const NONE: u32 = 1;
 pub(crate) const BOOL: u32 = 2;
 pub(crate) const ID: u32 = 3;

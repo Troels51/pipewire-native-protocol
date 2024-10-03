@@ -1,5 +1,5 @@
-mod deserialize;
-mod serialize;
+pub mod deserialize;
+pub mod serialize;
 mod spa_pod_types;
 pub mod value;
 

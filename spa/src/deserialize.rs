@@ -9,7 +9,7 @@
 //! You can also implement the [`PodDeserialize`] trait on another type yourself. See the traits documentation for more
 //! information on how to do that.
 
-use std::{convert::Infallible, ffi::c_void, marker::PhantomData, ptr};
+use std::{convert::Infallible, ffi::c_void, marker::PhantomData};
 
 use nom::{
     bytes::complete::{tag, take},
