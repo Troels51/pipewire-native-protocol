@@ -4,6 +4,9 @@
 [![Docs.rs](https://docs.rs/pipewirers/badge.svg)](https://docs.rs/pipewirers)
 [![CI](https://github.com/troels51/pipewirers/workflows/CI/badge.svg)](https://github.com/troels51/pipewirers/actions)
 
+This is an experiment in communicating with pipewire directly using a UnixStream and SPA pod serializer/deserializer
+
+
 ## Installation
 
 ### Cargo
