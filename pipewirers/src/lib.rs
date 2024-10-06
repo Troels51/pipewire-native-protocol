@@ -1,9 +1,12 @@
 use std::io::{Cursor, IoSlice};
 
 use spa::{
+    deserialize::PodDeserialize,
     serialize::{PodSerialize, PodSerializer},
     value::Value,
+    CanonicalFixedSizedPod,
 };
+use spa_derive::{PodDeserialize, PodSerialize};
 use tokio::{
     io::{self, AsyncWriteExt},
     net::unix::{OwnedReadHalf, OwnedWriteHalf},
@@ -16,6 +19,9 @@ pub struct PipewireClient {
 }
 
 impl PipewireClient {
+    const CORE_ID: u32 = 0;
+    const CLIENT_ID: u32 = 1;
+
     pub async fn connect(stream: tokio::net::UnixStream) -> Self {
         let (reader, writer) = stream.into_split();
         let mut client = Self {
@@ -31,16 +37,25 @@ impl PipewireClient {
         client
     }
 
-    async fn hello(&mut self, version: i32) -> io::Result<()> {
-        let payload = Value::Struct(vec![Value::Int(version)]);
-        let mut message = Message::new(0, 1, self.seq, payload);
+    async fn call_method(
+        &mut self,
+        id: u32,
+        opcode: u8,
+        payload: impl PodSerialize,
+    ) -> io::Result<()> {
+        let mut message = Message::new(id, opcode, self.seq, payload);
         message.write(&mut self.writer).await?;
         Ok(())
     }
 
+    async fn hello(&mut self, version: i32) -> io::Result<()> {
+        self.call_method(Self::CORE_ID, 1, Hello { version: version })
+            .await
+    }
+
     async fn update_properties(&mut self) -> io::Result<()> {
         let payload = Value::Struct(vec![Value::Struct(vec![Value::Int(0)])]);
-        let mut message = Message::new(0, 1, self.seq, payload);
+        let mut message = Message::new(Self::CLIENT_ID, 1, self.seq, payload);
         message.write(&mut self.writer).await?;
         Ok(())
     }
@@ -69,13 +84,19 @@ impl Header {
     }
 }
 
-struct Message {
+struct Message<T>
+where
+    T: PodSerialize,
+{
     header: Header,
-    payload: Value,
+    payload: T,
 }
 
-impl Message {
-    fn new(id: u32, opcode: u8, seq: u32, payload: Value) -> Self {
+impl<T> Message<T>
+where
+    T: PodSerialize,
+{
+    fn new(id: u32, opcode: u8, seq: u32, payload: T) -> Self {
         Self {
             header: Header::incomplete(id, opcode, seq),
             payload: payload,
@@ -93,4 +114,27 @@ impl Message {
         out.write_vectored(&[IoSlice::new(self.header.as_bytes()), IoSlice::new(&buffer)])
             .await
     }
+}
+#[derive(PodSerialize, PodDeserialize)]
+struct Hello {
+    version: i32,
+}
+
+/// Struct(
+///     Struct(
+///        Int: n_items
+///        (String: key
+///         String: value)*
+///     ): props
+///  )
+
+// #[derive(PodSerialize, PodDeserialize)]
+struct UpdateProperties {
+    props: Properties,
+}
+
+// #[derive(PodSerialize, PodDeserialize)]
+struct Properties {
+    n_items: i32,
+    items: Vec<(String, String)>,
 }

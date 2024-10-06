@@ -11,6 +11,7 @@ rust-version = "1.75"
 members = [
     "pipewirers",
     "spa",
+    "spa_derive",
     "pipewirers-cli",
 ]
 resolver = "2"
