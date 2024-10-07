@@ -1,20 +1,23 @@
-use std::io::{Cursor, IoSlice};
+use core::panic;
+use std::{
+    collections::HashMap,
+    io::{Cursor, IoSlice},
+};
 
 use spa::{
-    deserialize::PodDeserialize,
+    deserialize::{PodDeserialize, PodDeserializer},
     serialize::{PodSerialize, PodSerializer},
     value::Value,
     CanonicalFixedSizedPod,
 };
 use spa_derive::{PodDeserialize, PodSerialize};
 use tokio::{
-    io::{self, AsyncWriteExt},
+    io::{self, AsyncReadExt, AsyncWriteExt},
     net::unix::{OwnedReadHalf, OwnedWriteHalf},
 };
-use zerocopy::AsBytes;
+use zerocopy::{AsBytes, FromBytes, FromZeroes};
 pub struct PipewireClient {
-    reader: OwnedReadHalf,
-    writer: OwnedWriteHalf,
+    stream: tokio::net::UnixStream,
     seq: u32,
 }
 
@@ -22,19 +25,35 @@ impl PipewireClient {
     const CORE_ID: u32 = 0;
     const CLIENT_ID: u32 = 1;
 
-    pub async fn connect(stream: tokio::net::UnixStream) -> Self {
-        let (reader, writer) = stream.into_split();
-        let mut client = Self {
-            reader,
-            writer,
-            seq: 0,
-        };
+    pub async fn connect(stream: tokio::net::UnixStream) -> io::Result<Self> {
+        let mut client = Self { stream, seq: 2 };
 
-        let _ = client.hello(3).await;
+        client.hello(3).await?;
         client.seq += 1;
         let _ = client.update_properties().await;
+        dbg!("Update properties");
         client.seq += 1;
-        client
+        // let _ = client.get_registry().await;
+        dbg!("Get registry");
+        client.seq += 1;
+
+        let mut header = Header::new_zeroed();
+        let mut header = [0u8; 16];
+        let _ = client.stream.readable().await;
+        println!("Readable");
+        let bytes_read = client.stream.read_exact(header.as_bytes_mut()).await?; // Yes, Yes, unsafe
+        println!("bytes: {}", bytes_read);
+        // let mut buffer = Vec::<u8>::with_capacity(header.size());
+        // let _ = client.stream.read(&mut buffer).await;
+        // let value: Value = match PodDeserializer::deserialize_from(&buffer) {
+        //     Ok((remain, value)) => value,
+        //     Err(e) => {
+        //         println!("Could not parse message");
+        //         panic!("Not handled yet");
+        //     }
+        // };
+        // println!("Got value {:?}", value);
+        Ok(client)
     }
 
     async fn call_method(
@@ -44,7 +63,9 @@ impl PipewireClient {
         payload: impl PodSerialize,
     ) -> io::Result<()> {
         let mut message = Message::new(id, opcode, self.seq, payload);
-        message.write(&mut self.writer).await?;
+        self.stream.writable().await?;
+        let size = message.write(&mut self.stream).await?;
+        dbg!(self.stream.take_error());
         Ok(())
     }
 
@@ -54,14 +75,37 @@ impl PipewireClient {
     }
 
     async fn update_properties(&mut self) -> io::Result<()> {
-        let payload = Value::Struct(vec![Value::Struct(vec![Value::Int(0)])]);
-        let mut message = Message::new(Self::CLIENT_ID, 1, self.seq, payload);
-        message.write(&mut self.writer).await?;
+        self.call_method(
+            Self::CLIENT_ID,
+            2,
+            UpdateProperties {
+                props: HashMap::from([("application.name".into(), "pipewirersrrsrs".into())]),
+            },
+        )
+        .await
+    }
+
+    async fn get_permissions(&mut self) -> io::Result<()> {
+        let payload = GetPermissions { index: 0, num: 3 };
+        let mut message = Message::new(Self::CLIENT_ID, 3, self.seq, payload);
+        let _ = self.stream.writable().await;
+        message.write(&mut self.stream).await?;
+        Ok(())
+    }
+
+    async fn get_registry(&mut self) -> io::Result<()> {
+        let payload = GetRegistry {
+            version: 3,
+            new_id: 500,
+        };
+        let mut message = Message::new(Self::CORE_ID, 5, self.seq, payload);
+        let _ = self.stream.writable().await;
+        message.write(&mut self.stream).await?;
         Ok(())
     }
 }
 
-#[derive(AsBytes)]
+#[derive(AsBytes, FromBytes, FromZeroes)]
 #[repr(C)]
 struct Header {
     id: u32,
@@ -111,8 +155,8 @@ where
             .0
             .into_inner();
         self.header.opcode_size = (buffer.len() << 8) as u32 + self.header.opcode_size;
-        out.write_vectored(&[IoSlice::new(self.header.as_bytes()), IoSlice::new(&buffer)])
-            .await
+        out.write(self.header.as_bytes()).await?;
+        out.write(&buffer).await
     }
 }
 #[derive(PodSerialize, PodDeserialize)]
@@ -120,21 +164,31 @@ struct Hello {
     version: i32,
 }
 
-/// Struct(
-///     Struct(
-///        Int: n_items
-///        (String: key
-///         String: value)*
-///     ): props
-///  )
-
-// #[derive(PodSerialize, PodDeserialize)]
+#[derive(PodSerialize, PodDeserialize)]
 struct UpdateProperties {
-    props: Properties,
+    props: HashMap<String, String>,
 }
 
-// #[derive(PodSerialize, PodDeserialize)]
-struct Properties {
-    n_items: i32,
-    items: Vec<(String, String)>,
+#[derive(PodSerialize, PodDeserialize)]
+struct Info {
+    id: i32,
+    cookie: i32,
+    user_name: String,
+    host_name: String,
+    version: String,
+    name: String,
+    change_mask: i64,
+    props: HashMap<String, String>,
+}
+
+#[derive(PodSerialize, PodDeserialize)]
+struct GetRegistry {
+    version: i32,
+    new_id: i32,
+}
+
+#[derive(PodSerialize, PodDeserialize)]
+struct GetPermissions {
+    index: i32,
+    num: i32,
 }

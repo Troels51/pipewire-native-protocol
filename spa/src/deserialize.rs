@@ -1918,3 +1918,38 @@ impl<'de, T> Visitor<'de> for PointerVisitor<T> {
         Ok((type_, pointer as *const T))
     }
 }
+
+impl<'de> PodDeserialize<'de> for std::collections::HashMap<String, String> {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        Self: Sized,
+    {
+        struct HashMapVisitor;
+        impl<'de> Visitor<'de> for HashMapVisitor {
+            type Value = std::collections::HashMap<String, String>;
+            type ArrayElem = std::convert::Infallible;
+            fn visit_struct(
+                &self,
+                struct_deserializer: &mut StructPodDeserializer<'de>,
+            ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+                let mut dict = std::collections::HashMap::new();
+                let n_items = struct_deserializer
+                    .deserialize_field()?
+                    .expect("Input had no n_items field");
+                for _ in 0..n_items {
+                    let key: String = struct_deserializer
+                        .deserialize_field()?
+                        .expect("Input missed a key field");
+                    let value: String = struct_deserializer
+                        .deserialize_field()?
+                        .expect("Input missed a value field");
+                    dict.insert(key, value);
+                }
+                Ok(dict)
+            }
+        }
+        deserializer.deserialize_struct(HashMapVisitor)
+    }
+}
