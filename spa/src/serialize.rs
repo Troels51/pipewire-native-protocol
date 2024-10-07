@@ -126,6 +126,15 @@ impl PodSerialize for str {
     }
 }
 
+impl PodSerialize for String {
+    fn serialize<O: Write + Seek>(
+        &self,
+        serializer: PodSerializer<O>,
+    ) -> Result<SerializeSuccess<O>, GenError> {
+        serializer.serialize_string(self.as_str())
+    }
+}
+
 // Serialize into a `Bytes` pod.
 impl PodSerialize for [u8] {
     fn serialize<O: Write + Seek>(
@@ -728,5 +737,20 @@ impl<T: CanonicalFixedSizedPod + FixedSizedPod> PodSerialize for Choice<T> {
         serializer: PodSerializer<O>,
     ) -> Result<SerializeSuccess<O>, GenError> {
         serializer.serialize_choice(self)
+    }
+}
+/// Serialize a HashMap as a SPA dict, which is the number of items followed by key, value pairs serialized following each other
+impl PodSerialize for std::collections::HashMap<String, String> {
+    fn serialize<O: Write + Seek>(
+        &self,
+        serializer: PodSerializer<O>,
+    ) -> Result<SerializeSuccess<O>, GenError> {
+        let mut serializer = serializer.serialize_struct()?;
+        serializer.serialize_field(&(self.len() as i32))?;
+        for (key, value) in self {
+            serializer.serialize_field(key.as_str())?;
+            serializer.serialize_field(value.as_str())?;
+        }
+        serializer.end()
     }
 }

@@ -736,3 +736,13 @@ impl<'de> PodDeserialize<'de> for Value {
         deserializer.deserialize_any()
     }
 }
+
+// impl<'de> PodDeserialize<'de> for HashMap<String, String> {
+//     fn deserialize(
+//         deserializer: PodDeserializer<'de>,
+//     ) -> Result<(Self, deserialize::DeserializeSuccess<'de>), deserialize::DeserializeError<&'de [u8]>>
+//     where
+//         Self: Sized {
+//         deserializer.deserialize_struct(visitor)
+//     }
+// }
