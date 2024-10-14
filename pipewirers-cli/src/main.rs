@@ -1,6 +1,6 @@
 use std::env;
 
-use pipewirers::PipewireClient;
+use pipewire_native_protocol::PipewireClient;
 
 #[tokio::main]
 async fn main() -> tokio::io::Result<()> {

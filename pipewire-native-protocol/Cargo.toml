@@ -1,5 +1,5 @@
 [package]
-name = "pipewirers"
+name = "pipewire-native-protocol"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true

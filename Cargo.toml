@@ -9,7 +9,7 @@ rust-version = "1.75"
 
 [workspace]
 members = [
-    "pipewirers",
+    "pipewire-native-protocol",
     "spa",
     "spa_derive",
     "pipewirers-cli",

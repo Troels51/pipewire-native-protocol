@@ -1,21 +1,30 @@
-use core::panic;
+pub mod client;
+pub mod client_node;
+pub mod core_proxy;
+pub mod device;
+pub mod factory;
+pub mod link;
+pub mod metadata;
+pub mod module;
+pub mod node;
+pub mod port;
+pub mod profiler;
+pub mod registry;
+
 use std::{
     collections::HashMap,
-    io::{Cursor, IoSlice},
+    io::{Cursor},
 };
 
 use spa::{
     deserialize::{PodDeserialize, PodDeserializer},
     serialize::{PodSerialize, PodSerializer},
-    value::{Fd, Id, Value},
-    CanonicalFixedSizedPod,
 };
-use spa_derive::{PodDeserialize, PodSerialize};
 use tokio::{
     io::{self, AsyncReadExt, AsyncWriteExt},
-    net::unix::{OwnedReadHalf, OwnedWriteHalf},
 };
 use zerocopy::{AsBytes, FromBytes, FromZeroes};
+
 pub struct PipewireClient {
     stream: tokio::net::UnixStream,
     seq: u32,
@@ -31,7 +40,7 @@ impl PipewireClient {
         client.hello(3).await?;
         let _ = client.update_properties().await;
         // let _ = client.get_registry().await;
-        let value: Info = client.read().await?;
+        let value: core_proxy::Info = client.read().await?;
         println!("{:?}", value);
         Ok(client)
     }
@@ -68,7 +77,7 @@ impl PipewireClient {
     }
 
     async fn hello(&mut self, version: i32) -> io::Result<()> {
-        self.call_method(Self::CORE_ID, 1, Hello { version: version })
+        self.call_method(Self::CORE_ID, 1, core_proxy::Hello { version: version })
             .await
     }
 
@@ -76,7 +85,7 @@ impl PipewireClient {
         self.call_method(
             Self::CLIENT_ID,
             2,
-            UpdateProperties {
+            client::UpdateProperties {
                 props: HashMap::from([("application.name".into(), "pipewirers".into())]),
             },
         )
@@ -84,7 +93,7 @@ impl PipewireClient {
     }
 
     async fn get_permissions(&mut self) -> io::Result<()> {
-        let payload = GetPermissions { index: 0, num: 3 }; // TODO: Real values
+        let payload = core_proxy::GetPermissions { index: 0, num: 3 }; // TODO: Real values
         let mut message = Message::new(Self::CLIENT_ID, 3, self.seq, payload);
         let _ = self.stream.writable().await;
         message.write(&mut self.stream).await?;
@@ -92,7 +101,7 @@ impl PipewireClient {
     }
 
     async fn get_registry(&mut self) -> io::Result<()> {
-        let payload = GetRegistry {
+        let payload = core_proxy::GetRegistry {
             version: 3,
             new_id: 500,
         };
@@ -163,121 +172,6 @@ where
 
 enum Event {
     //Core
-    Info(Info),
-    Done(Done),
-}
-// Methods and event structs
-// ==== Core ====
-// ==== Core::Methods ====
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct Hello {
-    version: i32,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct Sync {
-    id: i32,
-    seq: i32,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct Pong {
-    id: i32,
-    seq: i32,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct GetRegistry {
-    version: i32,
-    new_id: i32,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct CreateObject {
-    factory_name: String,
-    type_: String,
-    version: i32,
-    props: HashMap<String, String>,
-    new_id: i32,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct Destroy {
-    id: i32,
-}
-// ==== Core::Events ====
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct Info {
-    id: i32,
-    cookie: i32,
-    user_name: String,
-    host_name: String,
-    version: String,
-    name: String,
-    change_mask: i64,
-    props: HashMap<String, String>,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct Done {
-    id: i32,
-    seq: i32,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct Ping {
-    id: i32,
-    seq: i32,
-}
-
-// Both event and method
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct Error {
-    id: i32,
-    seq: i32,
-    res: i32,
-    message: String,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct RemoveId {
-    id: i32,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct BoundId {
-    id: i32,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct AddMem {
-    id: i32,
-    type_: Id,
-    fd: Fd,
-    flags: i32,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct RemoveMem {
-    id: i32,
-}
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct BoundProps {
-    id: i32,
-    global_id: i32,
-    props: HashMap<String, String>,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct GetPermissions {
-    index: i32,
-    num: i32,
-}
-
-// ==== Registry ====
-
-// ==== Client ====
-#[derive(PodSerialize, PodDeserialize, Debug)]
-struct UpdateProperties {
-    props: HashMap<String, String>,
+    Info(core_proxy::Info),
+    Done(core_proxy::Done),
 }

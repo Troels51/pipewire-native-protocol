@@ -6,5 +6,5 @@ authors.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-pipewirers = { path = "../pipewirers"}
+pipewire-native-protocol = { path = "../pipewire-native-protocol"}
 tokio = { workspace = true, features = ["net", "macros", "rt", "rt-multi-thread"] }
