@@ -1,10 +1,14 @@
 use std::collections::HashMap;
 
 use spa::{
-    serialize::{PodSerializer},
-    value::{Fd, Id},
+    deserialize::{DeserializeError, PodDeserialize, PodDeserializer},
+    serialize::{PodSerialize, PodSerializer},
+    value::{Fd, Id, Value},
+    CanonicalFixedSizedPod,
 };
 use spa_derive::{PodDeserialize, PodSerialize};
+
+use crate::opcode;
 
 // Methods and event structs
 // ==== Core ====
@@ -46,6 +50,85 @@ pub struct Destroy {
     pub id: i32,
 }
 // ==== pub Corepub ::Events ====
+#[derive(Debug)]
+pub enum CoreEvent {
+    Info(Info),
+    Done(Done),
+    Ping(Ping),
+    Error(Error),
+    RemoveId(RemoveId),
+    BoundId(BoundId),
+    AddMem(AddMem),
+    RemoveMem(RemoveMem),
+    BoundProps(BoundProps),
+}
+impl opcode::OpCode for CoreEvent {
+    fn opcode(&self) -> u32 {
+        match self {
+            CoreEvent::Info(_) => 0,
+            CoreEvent::Done(_) => 1,
+            CoreEvent::Ping(_) => 2,
+            CoreEvent::Error(_) => 3,
+            CoreEvent::RemoveId(_) => 4,
+            CoreEvent::BoundId(_) => 5,
+            CoreEvent::AddMem(_) => 6,
+            CoreEvent::RemoveMem(_) => 7,
+            CoreEvent::BoundProps(_) => 8,
+        }
+    }
+
+    fn deserialize_from_opcode<'de>(
+        opcode: u32,
+        buffer: &'de [u8],
+    ) -> Result<(&'de [u8], Self), spa::deserialize::DeserializeError<&'de [u8]>>
+    where
+        Self: Sized,
+    {
+        match opcode {
+            0 => {
+                let (remain, value): (&[u8], Info) = PodDeserializer::deserialize_from(&buffer)?;
+                Ok((remain, CoreEvent::Info(value)))
+            }
+            1 => {
+                let (remain, value): (&[u8], Done) = PodDeserializer::deserialize_from(&buffer)?;
+                Ok((remain, CoreEvent::Done(value)))
+            }
+            2 => {
+                let (remain, value): (&[u8], Ping) = PodDeserializer::deserialize_from(&buffer)?;
+                Ok((remain, CoreEvent::Ping(value)))
+            }
+            3 => {
+                let (remain, value): (&[u8], Error) = PodDeserializer::deserialize_from(&buffer)?;
+                Ok((remain, CoreEvent::Error(value)))
+            }
+            4 => {
+                let (remain, value): (&[u8], RemoveId) =
+                    PodDeserializer::deserialize_from(&buffer)?;
+                Ok((remain, CoreEvent::RemoveId(value)))
+            }
+            5 => {
+                let (remain, value): (&[u8], BoundId) = PodDeserializer::deserialize_from(&buffer)?;
+                Ok((remain, CoreEvent::BoundId(value)))
+            }
+            6 => {
+                let (remain, value): (&[u8], AddMem) = PodDeserializer::deserialize_from(&buffer)?;
+                Ok((remain, CoreEvent::AddMem(value)))
+            }
+            7 => {
+                let (remain, value): (&[u8], RemoveMem) =
+                    PodDeserializer::deserialize_from(&buffer)?;
+                Ok((remain, CoreEvent::RemoveMem(value)))
+            }
+            8 => {
+                let (remain, value): (&[u8], BoundProps) =
+                    PodDeserializer::deserialize_from(&buffer)?;
+                Ok((remain, CoreEvent::BoundProps(value)))
+            }
+            _ => Err(DeserializeError::InvalidType),
+        }
+    }
+}
+
 #[derive(PodSerialize, PodDeserialize, Debug)]
 pub struct Info {
     pub id: i32,
@@ -106,10 +189,4 @@ pub struct BoundProps {
     pub id: i32,
     pub global_id: i32,
     pub props: HashMap<String, String>,
-}
-
-#[derive(PodSerialize, PodDeserialize, Debug)]
-pub struct GetPermissions {
-    pub index: i32,
-    pub num: i32,
 }
