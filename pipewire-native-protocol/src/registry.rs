@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use spa::{
-    serialize::{PodSerializer},
-};
+use spa::serialize::PodSerializer;
 use spa_derive::{PodDeserialize, PodSerialize};
 // === Methods ===
 
@@ -19,6 +17,12 @@ pub struct Destroy {
 }
 
 // === Events ===
+#[derive(Debug)]
+pub enum RegistryEvent {
+    Global(Global),
+    GlobalRemove(GlobalRemove),
+}
+
 #[derive(PodSerialize, PodDeserialize, Debug)]
 pub struct Global {
     pub id: i32,

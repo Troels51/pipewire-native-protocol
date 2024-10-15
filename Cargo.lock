@@ -39,17 +39,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bitfield-struct"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de05f8756f1c68937349406d4632ae96ae35901019b5e59c508d9c38c64715fb"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "bitflags"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -257,13 +246,12 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 name = "pipewire-native-protocol"
 version = "0.1.0"
 dependencies = [
- "bitfield-struct",
  "cookie-factory",
  "nom",
  "spa",
  "spa_derive",
  "tokio",
- "zerocopy",
+ "zerocopy 0.8.5",
 ]
 
 [[package]]
@@ -337,7 +325,7 @@ dependencies = [
  "spa",
  "syn",
  "tokio",
- "zerocopy",
+ "zerocopy 0.7.35",
 ]
 
 [[package]]
@@ -470,7 +458,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
 dependencies = [
  "byteorder",
- "zerocopy-derive",
+ "zerocopy-derive 0.7.35",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6129d25825e874589a0e529175dd060c13dab4f3d960c6a0b711e5535b598bb2"
+dependencies = [
+ "zerocopy-derive 0.8.5",
 ]
 
 [[package]]
@@ -478,6 +475,17 @@ name = "zerocopy-derive"
 version = "0.7.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d917df3784b4e2f5deb708d14623b2c02833890e1aa7a5dd1088998e8e9402b1"
 dependencies = [
  "proc-macro2",
  "quote",

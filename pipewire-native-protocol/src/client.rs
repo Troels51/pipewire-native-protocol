@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use spa::{
-    serialize::{PodSerializer},
-};
+use spa::serialize::PodSerializer;
 use spa_derive::{PodDeserialize, PodSerialize};
 
 // === Methods ===
@@ -31,6 +29,12 @@ pub struct UpdatePermissions {
 }
 
 // === Events ===
+#[derive(Debug)]
+pub enum ClientEvent {
+    Info(Info),
+    Permissions(Permissions),
+}
+
 #[derive(PodSerialize, PodDeserialize, Debug)]
 pub struct Info {
     pub id: i32,
