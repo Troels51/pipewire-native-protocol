@@ -6,15 +6,6 @@
 
 This is an experiment in communicating with pipewire directly using a UnixStream and SPA pod serializer/deserializer
 
-
-## Installation
-
-### Cargo
-
-* Install the rust toolchain in order to have cargo installed by following
-  [this](https://www.rust-lang.org/tools/install) guide.
-* run `cargo install pipewirers`
-
 ## License
 
 Licensed under

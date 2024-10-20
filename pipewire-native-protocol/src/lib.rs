@@ -16,7 +16,7 @@ use std::{collections::HashMap, io::Cursor};
 
 use opcode::OpCode;
 use spa::{
-    deserialize::{self, DeserializeError, PodDeserialize, PodDeserializer},
+    deserialize::DeserializeError,
     serialize::{PodSerialize, PodSerializer},
 };
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};

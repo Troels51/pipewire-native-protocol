@@ -1,5 +1,3 @@
-use spa::deserialize::PodDeserialize;
-
 pub(crate) trait OpCode {
     fn opcode(&self) -> u32;
     // Todo: Create an error code that covers both deserialize and unknow opcode

@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use spa::{
-    serialize::{PodSerializer},
-};
+use spa::serialize::PodSerializer;
 use spa_derive::{PodDeserialize, PodSerialize};
 // === Methods ===
 #[derive(PodSerialize, PodDeserialize, Debug)]
