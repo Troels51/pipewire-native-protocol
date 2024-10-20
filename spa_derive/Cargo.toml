@@ -9,9 +9,8 @@ rust-version.workspace = true
 cookie-factory = "0.3.3"
 nom = "7.1.3"
 tokio.workspace = true
-zerocopy = { version = "0.7.35", features = ["derive"] }
 spa = { path = "../spa"}
-proc-macro2 = "1"
+proc-macro2 = "1.0.88"
 quote = "1"
 syn = "2.0.79"
 
