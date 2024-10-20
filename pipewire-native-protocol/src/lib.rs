@@ -32,11 +32,10 @@ const CLIENT_ID: u32 = 1;
 
 impl PipewireClient {
     pub async fn connect(stream: tokio::net::UnixStream) -> io::Result<Self> {
-        let mut client = Self { stream, seq: 2 };
+        let mut client = Self { stream, seq: 1 };
 
         client.hello(3).await?;
         let _ = client.update_properties().await;
-        // let _ = client.get_registry().await;
         let value: Event = client.read().await?;
         println!("{:?}", value);
         Ok(client)
@@ -50,7 +49,7 @@ impl PipewireClient {
     ) -> io::Result<()> {
         let mut message = Message::new(id, opcode, self.seq, payload);
         self.stream.writable().await?;
-        let _ = message.write(&mut self.stream).await?;
+        let _ = self.write(&mut message).await?;
         self.seq += 1;
         Ok(())
     }
@@ -63,6 +62,16 @@ impl PipewireClient {
         let (remain, value) =
             Event::deserialize_from_id_and_opcode(header.id, header.opcode(), &buffer).unwrap();
         Ok(value)
+    }
+
+    async fn write<T: PodSerialize>(&mut self, message: &mut Message<T>) -> io::Result<usize> {
+        let buffer: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &message.payload)
+            .unwrap()
+            .0
+            .into_inner();
+        message.header.opcode_size = buffer.len() as u32 + message.header.opcode_size;
+        self.stream.write(message.header.as_bytes()).await?;
+        self.stream.write(&buffer).await
     }
 
     async fn hello(&mut self, version: i32) -> io::Result<()> {
@@ -79,25 +88,6 @@ impl PipewireClient {
             },
         )
         .await
-    }
-
-    async fn get_permissions(&mut self) -> io::Result<()> {
-        let payload = client::GetPermissions { index: 0, num: 3 }; // TODO: Real values
-        let mut message = Message::new(CLIENT_ID, 3, self.seq, payload);
-        let _ = self.stream.writable().await;
-        message.write(&mut self.stream).await?;
-        Ok(())
-    }
-
-    async fn get_registry(&mut self) -> io::Result<()> {
-        let payload = core_proxy::GetRegistry {
-            version: 3,
-            new_id: 500,
-        };
-        let mut message = Message::new(CORE_ID, 5, self.seq, payload);
-        let _ = self.stream.writable().await;
-        message.write(&mut self.stream).await?;
-        Ok(())
     }
 }
 
@@ -148,18 +138,6 @@ where
             header: Header::incomplete(id, opcode, seq),
             payload: payload,
         }
-    }
-    async fn write<'a, O: tokio::io::AsyncWrite + Unpin + 'a>(
-        &mut self,
-        mut out: O,
-    ) -> io::Result<usize> {
-        let buffer: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &self.payload)
-            .unwrap()
-            .0
-            .into_inner();
-        self.header.opcode_size = buffer.len() as u32 + self.header.opcode_size;
-        out.write(self.header.as_bytes()).await?;
-        out.write(&buffer).await
     }
 }
 
