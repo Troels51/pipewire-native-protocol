@@ -187,9 +187,8 @@ impl Event {
                 Ok((remain, Event::Core(value)))
             }
             CLIENT_ID => {
-                // let (remain, value) = client::ClientEvent::deserialize_from_opcode(opcode, buffer)?;
-                // Ok((remain, Event::Client(value)))
-                Err(DeserializeError::InvalidType)
+                let (remain, value) = client::ClientEvent::deserialize_from_opcode(opcode, buffer)?;
+                Ok((remain, Event::Client(value)))
             }
             _ => Err(DeserializeError::InvalidType),
         }
