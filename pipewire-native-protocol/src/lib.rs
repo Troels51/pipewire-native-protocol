@@ -16,7 +16,7 @@ use std::{collections::HashMap, io::Cursor};
 
 use opcode::OpCode;
 use spa::{
-    deserialize::{self, DeserializeError, PodDeserialize, PodDeserializer},
+    deserialize::DeserializeError,
     serialize::{PodSerialize, PodSerializer},
 };
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
@@ -64,14 +64,14 @@ impl PipewireClient {
         Ok(value)
     }
 
-    async fn write<T: PodSerialize>(&mut self, message: &mut Message<T>) -> io::Result<usize> {
+    async fn write<T: PodSerialize>(&mut self, message: &mut Message<T>) -> io::Result<()> {
         let buffer: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &message.payload)
             .unwrap()
             .0
             .into_inner();
         message.header.opcode_size = buffer.len() as u32 + message.header.opcode_size;
-        self.stream.write(message.header.as_bytes()).await?;
-        self.stream.write(&buffer).await
+        self.stream.write_all(message.header.as_bytes()).await?;
+        self.stream.write_all(&buffer).await
     }
 
     async fn hello(&mut self, version: i32) -> io::Result<()> {

@@ -43,7 +43,7 @@ use crate::{
 /// Deserialize a `String` pod without copying:
 /// ```rust
 /// use std::io;
-/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess, StringVisitor};
+/// use spa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess, StringVisitor};
 ///
 /// struct ContainsStr<'s>(&'s str);
 ///
@@ -64,8 +64,8 @@ use crate::{
 /// ```rust
 /// use std::io;
 /// use std::io::Cursor;
-/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess, Visitor};
-/// use libspa::pod::serialize::PodSerializer;
+/// use spa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess, Visitor};
+/// use spa::pod::serialize::PodSerializer;
 ///
 /// struct Numbers(Vec<i32>);
 ///
@@ -98,7 +98,7 @@ use crate::{
 /// Make a struct deserialize from a `Struct` pod:
 /// ```rust
 /// use std::{convert::TryInto, io};
-/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess, Visitor, StructPodDeserializer};
+/// use spa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess, Visitor, StructPodDeserializer};
 ///
 /// struct Animal {
 ///     name: String,

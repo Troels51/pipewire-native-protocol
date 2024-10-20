@@ -47,7 +47,7 @@ use crate::{
 /// Make a type serialize into a `String` pod.
 /// ```rust
 /// use std::io;
-/// use libspa::pod::serialize::{GenError, PodSerialize, PodSerializer, SerializeSuccess};
+/// use spa::pod::serialize::{GenError, PodSerialize, PodSerializer, SerializeSuccess};
 ///
 /// struct StringNewtype(String);
 ///
@@ -65,7 +65,7 @@ use crate::{
 /// Make a type serialize into a `Array` pod with `Int` pod elements:
 /// ```rust
 /// use std::io;
-/// use libspa::pod::serialize::{GenError, PodSerialize, PodSerializer, SerializeSuccess};
+/// use spa::pod::serialize::{GenError, PodSerialize, PodSerializer, SerializeSuccess};
 ///
 /// struct Numbers(Vec<i32>);
 ///
@@ -86,7 +86,7 @@ use crate::{
 /// Make a struct serialize into a `Struct` pod:
 /// ```rust
 /// use std::io;
-/// use libspa::pod::serialize::{GenError, PodSerialize, PodSerializer, SerializeSuccess};
+/// use spa::pod::serialize::{GenError, PodSerialize, PodSerializer, SerializeSuccess};
 ///
 /// struct Animal {
 ///     name: String,

@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
 use spa::{
-    deserialize::{DeserializeError, PodDeserialize, PodDeserializer},
-    serialize::{PodSerialize, PodSerializer},
-    value::{Fd, Id, Value},
-    CanonicalFixedSizedPod,
+    deserialize::{DeserializeError, PodDeserializer},
+    serialize::PodSerializer,
+    value::{Fd, Id},
 };
 use spa_derive::{PodDeserialize, PodSerialize};
 

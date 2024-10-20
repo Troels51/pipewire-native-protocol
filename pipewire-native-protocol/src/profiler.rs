@@ -1,7 +1,4 @@
-
-use spa::{
-    serialize::{PodSerializer},
-};
+use spa::serialize::PodSerializer;
 use spa_derive::{PodDeserialize, PodSerialize};
 // === Methods ===
 
