@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use spa::{
-    serialize::{PodSerializer},
+    deserialize::{PodDeserialize, PodDeserializer},
+    serialize::{PodSerialize, PodSerializer},
+    value::{Fd, Id, Value},
+    CanonicalFixedSizedPod,
 };
 use spa_derive::{PodDeserialize, PodSerialize};
 // === Methods ===
@@ -44,4 +47,13 @@ pub struct Info {
     pub error: String,
     pub props: HashMap<String, String>,
     pub param_info: HashMap<i32, i32>,
+}
+
+#[derive(PodSerialize, PodDeserialize, Debug)]
+pub struct Param {
+    pub seq: i32,
+    pub id: spa::value::Id,
+    pub index: i32,
+    pub next: i32,
+    pub param: spa::value::Value,
 }
