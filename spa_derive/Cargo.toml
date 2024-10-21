@@ -12,7 +12,7 @@ tokio.workspace = true
 spa = { path = "../spa"}
 proc-macro2 = "1.0.88"
 quote = "1"
-syn = "2.0.79"
+syn = "2.0.82"
 
 [lib]
 proc-macro = true
