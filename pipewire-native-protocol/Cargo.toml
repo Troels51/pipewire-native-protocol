@@ -9,6 +9,6 @@ rust-version.workspace = true
 cookie-factory = "0.3.3"
 nom = "7.1.3"
 tokio.workspace = true
-zerocopy = { version = "0.8.6", features = ["derive"] }
+zerocopy = { version = "0.8.9", features = ["derive"] }
 spa = { path = "../spa"}
 spa_derive = { path = "../spa_derive"}
