@@ -17,4 +17,4 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-tokio = { version = "1.40.0", features = ["net", "io-util"] }
+tokio = { version = "1.41.1", features = ["net", "io-util"] }
