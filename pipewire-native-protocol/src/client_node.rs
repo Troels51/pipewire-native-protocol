@@ -58,6 +58,20 @@ pub struct PortBuffers {
 }
 
 // === Events ===
+pub enum ClientNodeEvent {
+    Transport(Transport),
+    SetParam(SetParam),
+    SetIo(SetIO),
+    Event(Event),
+    Command(Command),
+    AddPort(AddPort),
+    RemovePort(RemovePort),
+    PortSetParam(PortSetParam),
+    UseBuffers(UseBuffers),
+    PortSetIo(PortSetIO),
+    SetActivation(SetActivation),
+    PortSetMixInfo(PortSetMixInfo),
+}
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
 pub struct Transport {
@@ -142,7 +156,7 @@ pub struct UseBuffers {
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
-pub struct PortIO {
+pub struct PortSetIO {
     pub direction: i32,
     pub port_id: i32,
     pub mix_id: i32,

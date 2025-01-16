@@ -7,6 +7,9 @@ use spa_derive::{PodDeserialize, PodSerialize};
 // Factory has no methods
 
 // === Events ===
+pub enum FactoryEvent {
+    FactoryEvent(Info)
+}
 #[derive(PodSerialize, PodDeserialize, Debug)]
 pub struct Info {
     pub id: i32,

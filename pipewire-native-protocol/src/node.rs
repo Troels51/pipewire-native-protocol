@@ -30,6 +30,11 @@ pub struct SendCommand {
 }
 
 // === Events ===
+pub enum NodeEvent {
+    Info(Info),
+    Param(Param)
+}
+
 #[derive(PodSerialize, PodDeserialize, Debug)]
 pub struct Info {
     pub id: i32,

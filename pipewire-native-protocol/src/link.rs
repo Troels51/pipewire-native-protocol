@@ -7,6 +7,9 @@ use spa_derive::{PodDeserialize, PodSerialize};
 // Link has no methods
 
 // === Events ===
+pub enum LinkEvent {
+    Info(Info)
+}
 #[derive(PodSerialize, PodDeserialize, Debug)]
 pub struct Info {
     pub id: i32,

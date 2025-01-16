@@ -1,6 +1,6 @@
 use std::env;
 
-use pipewire_native_protocol::PipewireClient;
+use pipewire_native_protocol::PipewireConnection;
 
 #[tokio::main]
 async fn main() -> tokio::io::Result<()> {
@@ -14,7 +14,11 @@ async fn main() -> tokio::io::Result<()> {
     }
     if let Some(address) = address {
         let stream = tokio::net::UnixStream::connect(address).await?;
-        let client = PipewireClient::connect(stream).await;
+        let connection = PipewireConnection::connect(stream).await?;
+        let mut core_proxy = connection.create_core_proxy();
+        let client_proxy = connection.create_client_proxy();
+        core_proxy.hello().await?;
+        client_proxy.update_properties().await?;
         // wait for keypress
         let mut line = String::new();
         let input = std::io::stdin()

@@ -1,8 +1,9 @@
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
+use syn::parse::Parser;
 use syn::spanned::Spanned;
 use syn::{
-    parse_macro_input, parse_quote, Data, DeriveInput, Fields, GenericParam, Generics, Index,
+    parse, parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, GenericParam, Generics, Index, ItemStruct, LitInt, Token
 };
 
 #[proc_macro_derive(PodSerialize)]
@@ -89,6 +90,25 @@ pub fn derive_poddeserialize(input: proc_macro::TokenStream) -> proc_macro::Toke
 
     // Hand the output tokens back to the compiler.
     proc_macro::TokenStream::from(expanded)
+}
+
+
+#[proc_macro_attribute]
+pub fn opcode(attr: proc_macro::TokenStream, annotated_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+
+    let opcode = parse_macro_input!(attr as LitInt);
+    let mut result = annotated_item.clone(); // Don't know if there is an easier way to keep the original item, which we extend with the added impl
+    let item = parse_macro_input!(annotated_item as ItemStruct);
+    let name = item.ident;
+
+    let expanded = quote! {
+        // The generated impl.
+        impl spa::opcode::MessageOpCode for #name {
+            const OP_CODE: u32 = #opcode;
+        }
+    };
+    result.extend(proc_macro::TokenStream::from(expanded));
+    result
 }
 
 // Add a bound `T: PodSerialize` to every type parameter T.

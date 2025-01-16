@@ -18,6 +18,11 @@ pub struct EnumParams {
 }
 
 // === Events ===
+pub enum PortEvent {
+    Info(Info),
+    Param(Param)
+}
+
 #[derive(PodSerialize, PodDeserialize, Debug)]
 pub struct Info {
     pub id: i32,

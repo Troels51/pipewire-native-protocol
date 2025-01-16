@@ -2,6 +2,7 @@ pub mod deserialize;
 pub mod serialize;
 mod spa_pod_types;
 pub mod value;
+pub mod opcode;
 
 /// Implementors of this trait can be serialized into pods that always have the same size.
 /// This lets them be used as elements in `Array` type SPA Pods.

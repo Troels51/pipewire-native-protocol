@@ -1,41 +1,77 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use spa::{
-    deserialize::{DeserializeError, PodDeserializer},
-    serialize::PodSerializer,
-    value::{Fd, Id},
+    deserialize::{DeserializeError, PodDeserializer}, opcode::MessageOpCode, serialize::PodSerializer, value::{Fd, Id}
 };
 use spa_derive::{PodDeserialize, PodSerialize};
 
-use crate::opcode;
+use crate::InnerConnection;
+
+pub const CORE_ID: u32 = 0;
+
+// Proxy
+pub struct CoreProxy {
+    connection: Arc<Mutex<InnerConnection>>,
+}
+
+impl CoreProxy {
+    pub(crate) fn new(connection: Arc<Mutex<InnerConnection>>) -> CoreProxy {
+        CoreProxy { connection }
+    }
+    pub async fn hello(&mut self) -> Result<(), std::io::Error> {
+        self.connection
+            .lock()
+            .unwrap()
+            .call_method(CORE_ID, 1, Hello { version: 3 })
+            .await
+    }
+}
 
 // Methods and event structs
 // ==== Core ====
 // ==== pub Corepub ::Methods ====
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(1)]
 pub struct Hello {
     pub version: i32,
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(2)]
 pub struct Sync {
     pub id: i32,
     pub seq: i32,
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(3)]
 pub struct Pong {
     pub id: i32,
     pub seq: i32,
 }
 
+// There is both an event and a error method, they are the same except the opcode
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(4)]
+pub struct ErrorMethod {
+    pub id: i32,
+    pub seq: i32,
+    pub res: i32,
+    pub message: String,
+}
+
+#[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(5)]
 pub struct GetRegistry {
     pub version: i32,
     pub new_id: i32,
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(6)]
 pub struct CreateObject {
     pub factory_name: String,
     pub type_: String,
@@ -45,6 +81,7 @@ pub struct CreateObject {
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(7)]
 pub struct Destroy {
     pub id: i32,
 }
@@ -54,73 +91,59 @@ pub enum CoreEvent {
     Info(Info),
     Done(Done),
     Ping(Ping),
-    Error(Error),
+    Error(ErrorEvent),
     RemoveId(RemoveId),
     BoundId(BoundId),
     AddMem(AddMem),
     RemoveMem(RemoveMem),
     BoundProps(BoundProps),
 }
-impl opcode::OpCode for CoreEvent {
-    fn opcode(&self) -> u32 {
-        match self {
-            CoreEvent::Info(_) => 0,
-            CoreEvent::Done(_) => 1,
-            CoreEvent::Ping(_) => 2,
-            CoreEvent::Error(_) => 3,
-            CoreEvent::RemoveId(_) => 4,
-            CoreEvent::BoundId(_) => 5,
-            CoreEvent::AddMem(_) => 6,
-            CoreEvent::RemoveMem(_) => 7,
-            CoreEvent::BoundProps(_) => 8,
-        }
-    }
-
-    fn deserialize_from_opcode<'de>(
+impl spa::opcode::DeserializeFromOpCode for CoreEvent {
+    fn deserialize_from_opcode(
         opcode: u32,
-        buffer: &'de [u8],
-    ) -> Result<(&'de [u8], Self), spa::deserialize::DeserializeError<&'de [u8]>>
+        buffer: &[u8],
+    ) -> Result<(&[u8], Self), spa::deserialize::DeserializeError<&[u8]>>
     where
         Self: Sized,
     {
         match opcode {
-            0 => {
-                let (remain, value): (&[u8], Info) = PodDeserializer::deserialize_from(&buffer)?;
+            Info::OP_CODE => {
+                let (remain, value): (&[u8], Info) = PodDeserializer::deserialize_from(buffer)?;
                 Ok((remain, CoreEvent::Info(value)))
             }
-            1 => {
-                let (remain, value): (&[u8], Done) = PodDeserializer::deserialize_from(&buffer)?;
+            Done::OP_CODE => {
+                let (remain, value): (&[u8], Done) = PodDeserializer::deserialize_from(buffer)?;
                 Ok((remain, CoreEvent::Done(value)))
             }
-            2 => {
-                let (remain, value): (&[u8], Ping) = PodDeserializer::deserialize_from(&buffer)?;
+            Ping::OP_CODE => {
+                let (remain, value): (&[u8], Ping) = PodDeserializer::deserialize_from(buffer)?;
                 Ok((remain, CoreEvent::Ping(value)))
             }
-            3 => {
-                let (remain, value): (&[u8], Error) = PodDeserializer::deserialize_from(&buffer)?;
+            ErrorEvent::OP_CODE => {
+                let (remain, value): (&[u8], ErrorEvent) =
+                    PodDeserializer::deserialize_from(buffer)?;
                 Ok((remain, CoreEvent::Error(value)))
             }
-            4 => {
-                let (remain, value): (&[u8], RemoveId) =
-                    PodDeserializer::deserialize_from(&buffer)?;
+            RemoveId::OP_CODE => {
+                let (remain, value): (&[u8], RemoveId) = PodDeserializer::deserialize_from(buffer)?;
                 Ok((remain, CoreEvent::RemoveId(value)))
             }
-            5 => {
-                let (remain, value): (&[u8], BoundId) = PodDeserializer::deserialize_from(&buffer)?;
+            BoundId::OP_CODE => {
+                let (remain, value): (&[u8], BoundId) = PodDeserializer::deserialize_from(buffer)?;
                 Ok((remain, CoreEvent::BoundId(value)))
             }
-            6 => {
-                let (remain, value): (&[u8], AddMem) = PodDeserializer::deserialize_from(&buffer)?;
+            AddMem::OP_CODE => {
+                let (remain, value): (&[u8], AddMem) = PodDeserializer::deserialize_from(buffer)?;
                 Ok((remain, CoreEvent::AddMem(value)))
             }
-            7 => {
+            RemoveMem::OP_CODE => {
                 let (remain, value): (&[u8], RemoveMem) =
-                    PodDeserializer::deserialize_from(&buffer)?;
+                    PodDeserializer::deserialize_from(buffer)?;
                 Ok((remain, CoreEvent::RemoveMem(value)))
             }
-            8 => {
+            BoundProps::OP_CODE => {
                 let (remain, value): (&[u8], BoundProps) =
-                    PodDeserializer::deserialize_from(&buffer)?;
+                    PodDeserializer::deserialize_from(buffer)?;
                 Ok((remain, CoreEvent::BoundProps(value)))
             }
             _ => Err(DeserializeError::InvalidType),
@@ -129,6 +152,7 @@ impl opcode::OpCode for CoreEvent {
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(0)]
 pub struct Info {
     pub id: i32,
     pub cookie: i32,
@@ -141,20 +165,23 @@ pub struct Info {
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(1)]
 pub struct Done {
     pub id: i32,
     pub seq: i32,
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(2)]
 pub struct Ping {
     pub id: i32,
     pub seq: i32,
 }
 
-// Both event and method
+// There is both an event and a error method, they are the same except the opcode
 #[derive(PodSerialize, PodDeserialize, Debug)]
-pub struct Error {
+#[spa_derive::opcode(3)]
+pub struct ErrorEvent {
     pub id: i32,
     pub seq: i32,
     pub res: i32,
@@ -162,16 +189,19 @@ pub struct Error {
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(4)]
 pub struct RemoveId {
     pub id: i32,
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(5)]
 pub struct BoundId {
     pub id: i32,
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(6)]
 pub struct AddMem {
     pub id: i32,
     pub type_: Id,
@@ -180,10 +210,12 @@ pub struct AddMem {
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(7)]
 pub struct RemoveMem {
     pub id: i32,
 }
 #[derive(PodSerialize, PodDeserialize, Debug)]
+#[spa_derive::opcode(8)]
 pub struct BoundProps {
     pub id: i32,
     pub global_id: i32,

@@ -26,6 +26,10 @@ pub struct SetParam {
 }
 
 // === Events ===
+pub enum DeviceEvent {
+    Info(Info),
+    Param(Param)
+}
 #[derive(PodSerialize, PodDeserialize, Debug)]
 pub struct Info {
     pub id: i32,

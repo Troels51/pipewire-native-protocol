@@ -23,6 +23,10 @@ impl Default for Clear {
 }
 
 // === Events ===
+pub enum MetadataEvent {
+    Property(Property)
+}
+
 #[derive(PodSerialize, PodDeserialize, Debug)]
 pub struct Property {
     pub subject: i32,
