@@ -14,10 +14,9 @@ async fn main() -> tokio::io::Result<()> {
     }
     if let Some(address) = address {
         let stream = tokio::net::UnixStream::connect(address).await?;
-        let connection = PipewireConnection::connect(stream).await?;
-        let mut core_proxy = connection.create_core_proxy();
+        let mut connection = PipewireConnection::connect(stream).await?;
+        let mut core_proxy = connection.create_core_proxy().await?;
         let client_proxy = connection.create_client_proxy();
-        core_proxy.hello().await?;
         client_proxy.update_properties().await?;
         // wait for keypress
         let mut line = String::new();

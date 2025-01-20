@@ -4,29 +4,79 @@ use std::{
 };
 
 use spa::{
-    deserialize::{DeserializeError, PodDeserializer}, opcode::MessageOpCode, serialize::PodSerializer, value::{Fd, Id}
+    deserialize::{DeserializeError, PodDeserializer},
+    opcode::MessageOpCode,
+    serialize::PodSerializer,
+    value::{Fd, Id},
 };
 use spa_derive::{PodDeserialize, PodSerialize};
 
-use crate::InnerConnection;
+use crate::{
+    registry::{self, RegistryProxy},
+    InnerConnection,
+};
 
-pub const CORE_ID: u32 = 0;
+pub const CORE_ID: i32 = 0;
 
 // Proxy
 pub struct CoreProxy {
     connection: Arc<Mutex<InnerConnection>>,
+    event_channel: std::sync::mpsc::Receiver<CoreEvent>,
 }
 
 impl CoreProxy {
-    pub(crate) fn new(connection: Arc<Mutex<InnerConnection>>) -> CoreProxy {
-        CoreProxy { connection }
+    pub(crate) async fn new(
+        connection: Arc<Mutex<InnerConnection>>,
+        event_channel: std::sync::mpsc::Receiver<CoreEvent>,
+    ) -> std::io::Result<CoreProxy> {
+        let mut this = CoreProxy {
+            connection,
+            event_channel,
+        };
+        this.hello().await?;
+        Ok(this)
     }
-    pub async fn hello(&mut self) -> Result<(), std::io::Error> {
+    async fn hello(&mut self) -> Result<(), std::io::Error> {
         self.connection
             .lock()
             .unwrap()
-            .call_method(CORE_ID, 1, Hello { version: 3 })
+            .call_method(CORE_ID, Hello::OP_CODE, Hello { version: 3 })
             .await
+    }
+    pub async fn get_registry(&mut self) -> std::io::Result<RegistryProxy> {
+        let mut connection = self.connection.lock().unwrap();
+        connection.registry_id_counter = connection.registry_id_counter + 1;
+        let id = connection.registry_id_counter;
+        connection
+            .call_method(
+                CORE_ID,
+                GetRegistry::OP_CODE,
+                GetRegistry {
+                    version: RegistryProxy::VERSION,
+                    new_id: id,
+                },
+            )
+            .await?;
+        // wait for an event to get back to use?
+        let event = self.event_channel.recv().unwrap(); // The sender should never go do down before us, so this should never happen
+        match event {
+            CoreEvent::Info(info) => todo!(),
+            CoreEvent::Done(done) => todo!(),
+            CoreEvent::Ping(ping) => todo!(),
+            CoreEvent::Error(error_event) => todo!(),
+            CoreEvent::RemoveId(remove_id) => todo!(),
+            CoreEvent::BoundId(bound_id) => todo!(),
+            CoreEvent::AddMem(add_mem) => todo!(),
+            CoreEvent::RemoveMem(remove_mem) => todo!(),
+            CoreEvent::BoundProps(bound_props) => todo!(),
+        }
+        let (sender, receiver) = std::sync::mpsc::channel();
+        connection.registry_proxies.insert(id, sender);
+        Ok(registry::RegistryProxy::new(
+            id,
+            self.connection.clone(),
+            receiver,
+        ))
     }
 }
 

@@ -8,31 +8,29 @@ use tokio::io;
 
 use crate::{InnerConnection};
 
-pub const CLIENT_ID: u32 = 1;
 
 // Proxy
 pub struct ClientProxy {
     connection: Arc<Mutex<InnerConnection>>,
+    event_receiver: std::sync::mpsc::Receiver<ClientEvent>
 }
 
 impl ClientProxy {
-    pub(crate) fn new(connection: Arc<Mutex<InnerConnection>>) -> ClientProxy{
-        ClientProxy {connection}
+    pub const CLIENT_ID: i32 = 1;
+
+    pub(crate) fn new(connection: Arc<Mutex<InnerConnection>>, event_receiver: std::sync::mpsc::Receiver<ClientEvent>) -> ClientProxy{
+        ClientProxy {connection, event_receiver }
     }
 
     pub async fn update_properties(&self) -> io::Result<()> {
         self.connection.lock().unwrap().call_method(
-            CLIENT_ID,
+            ClientProxy::CLIENT_ID,
             2,
             UpdateProperties {
                 props: HashMap::from([("application.name".into(), "pipewirersssss".into())]),
             },
         )
         .await
-    }
-    pub async fn get_registry(&self) -> io::Result<()> {
-        // self.connection.lock().unwrap().call_method(CLIENT_ID, opcode, payload)
-        Ok(())
     }
 }
 
