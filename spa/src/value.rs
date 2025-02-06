@@ -70,6 +70,8 @@ pub enum Value {
     /// a pointer.
     Pointer(u32, *const c_void),
 }
+// SAFETY: Everything except Pointers are Send. Pointers are not Serialized, but the enum is kept for completions sake
+unsafe impl Send for Value {}
 
 /// an array of same type objects.
 #[derive(Debug, Clone, PartialEq)]

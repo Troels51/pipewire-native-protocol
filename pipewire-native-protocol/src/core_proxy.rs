@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
+    collections::HashMap, io::Error, sync::{Arc, Mutex}
 };
 
 use spa::{
@@ -13,25 +12,28 @@ use spa_derive::{PodDeserialize, PodSerialize};
 
 use crate::{
     registry::{self, RegistryProxy},
-    InnerConnection,
+    PipewireWriter, Proxies,
 };
 
 pub const CORE_ID: i32 = 0;
 
 // Proxy
 pub struct CoreProxy {
-    connection: Arc<Mutex<InnerConnection>>,
-    event_channel: std::sync::mpsc::Receiver<CoreEvent>,
+    connection: Arc<Mutex<PipewireWriter>>,
+    event_channel: tokio::sync::mpsc::Receiver<CoreEvent>,
+    proxies: Arc<Mutex<Proxies>>,
 }
 
 impl CoreProxy {
     pub(crate) async fn new(
-        connection: Arc<Mutex<InnerConnection>>,
-        event_channel: std::sync::mpsc::Receiver<CoreEvent>,
+        connection: Arc<Mutex<PipewireWriter>>,
+        event_channel: tokio::sync::mpsc::Receiver<CoreEvent>,
+        proxies: Arc<Mutex<Proxies>>,
     ) -> std::io::Result<CoreProxy> {
         let mut this = CoreProxy {
             connection,
             event_channel,
+            proxies,
         };
         this.hello().await?;
         Ok(this)
@@ -43,10 +45,22 @@ impl CoreProxy {
             .call_method(CORE_ID, Hello::OP_CODE, Hello { version: 3 })
             .await
     }
+
+    pub async fn sync(&mut self, id: i32) ->Result<(), std::io::Error>
+    {
+        self.connection.lock().unwrap().call_method(CORE_ID, Sync::OP_CODE, Sync {
+            id: 1,
+            seq: id,
+        }).await
+    }
+
     pub async fn get_registry(&mut self) -> std::io::Result<RegistryProxy> {
         let mut connection = self.connection.lock().unwrap();
-        connection.registry_id_counter = connection.registry_id_counter + 1;
-        let id = connection.registry_id_counter;
+        let mut proxies = self.proxies.lock().unwrap();
+        proxies.id_counter = proxies.id_counter + 1;
+        let id = proxies.id_counter;
+        let (sender, receiver) = tokio::sync::mpsc::channel(8);
+        proxies.registry_proxies.insert(id, sender);
         connection
             .call_method(
                 CORE_ID,
@@ -57,21 +71,6 @@ impl CoreProxy {
                 },
             )
             .await?;
-        // wait for an event to get back to use?
-        let event = self.event_channel.recv().unwrap(); // The sender should never go do down before us, so this should never happen
-        match event {
-            CoreEvent::Info(info) => todo!(),
-            CoreEvent::Done(done) => todo!(),
-            CoreEvent::Ping(ping) => todo!(),
-            CoreEvent::Error(error_event) => todo!(),
-            CoreEvent::RemoveId(remove_id) => todo!(),
-            CoreEvent::BoundId(bound_id) => todo!(),
-            CoreEvent::AddMem(add_mem) => todo!(),
-            CoreEvent::RemoveMem(remove_mem) => todo!(),
-            CoreEvent::BoundProps(bound_props) => todo!(),
-        }
-        let (sender, receiver) = std::sync::mpsc::channel();
-        connection.registry_proxies.insert(id, sender);
         Ok(registry::RegistryProxy::new(
             id,
             self.connection.clone(),
@@ -248,6 +247,7 @@ pub struct RemoveId {
 #[spa_derive::opcode(5)]
 pub struct BoundId {
     pub id: i32,
+    pub global_id: i32,
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]

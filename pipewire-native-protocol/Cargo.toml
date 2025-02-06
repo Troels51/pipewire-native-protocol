@@ -12,3 +12,5 @@ tokio.workspace = true
 zerocopy = { version = "0.8.6", features = ["derive"] }
 spa = { path = "../spa"}
 spa_derive = { path = "../spa_derive"}
+tokio-util = { version = "0.7.13", features = ["codec"] }
+tokio-stream = "0.1.17"

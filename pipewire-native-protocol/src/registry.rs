@@ -3,17 +3,17 @@ use std::{collections::HashMap, sync::{Arc, Mutex}};
 use spa::{deserialize::{DeserializeError, PodDeserializer}, opcode::{self, MessageOpCode}, serialize::PodSerializer};
 use spa_derive::{opcode, PodDeserialize, PodSerialize};
 
-use crate::{InnerConnection};
+use crate::{PipewireWriter};
 
 pub struct RegistryProxy {
     id: i32,
-    connection: Arc<Mutex<InnerConnection>>,
-    event_receiver: std::sync::mpsc::Receiver<RegistryEvent>,
+    connection: Arc<Mutex<PipewireWriter>>,
+    event_receiver: tokio::sync::mpsc::Receiver<RegistryEvent>,
 }
 
 impl RegistryProxy {
     pub(crate) const VERSION: i32 = 3; // Version of the registry interface used
-    pub(crate) fn new(id: i32, connection: Arc<Mutex<InnerConnection>>, event_receiver: std::sync::mpsc::Receiver<RegistryEvent>) -> RegistryProxy{
+    pub(crate) fn new(id: i32, connection: Arc<Mutex<PipewireWriter>>, event_receiver: tokio::sync::mpsc::Receiver<RegistryEvent>) -> RegistryProxy{
         RegistryProxy {id, connection, event_receiver }
     }
 }

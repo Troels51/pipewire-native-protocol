@@ -3,15 +3,15 @@ use std::{collections::HashMap, sync::{Arc, Mutex}};
 use spa::serialize::PodSerializer;
 use spa_derive::{PodDeserialize, PodSerialize};
 
-use crate::InnerConnection;
+use crate::PipewireWriter;
 
 pub struct FactoryProxy {
-    connection: Arc<Mutex<InnerConnection>>,
+    connection: Arc<Mutex<PipewireWriter>>,
     event_receiver: std::sync::mpsc::Receiver<FactoryEvent>
 }
 
 impl FactoryProxy {
-    pub(crate) fn new(connection: Arc<Mutex<InnerConnection>>, event_receiver: std::sync::mpsc::Receiver<FactoryEvent>) -> FactoryProxy{
+    pub(crate) fn new(connection: Arc<Mutex<PipewireWriter>>, event_receiver: std::sync::mpsc::Receiver<FactoryEvent>) -> FactoryProxy{
         FactoryProxy {connection, event_receiver }
     }
 }

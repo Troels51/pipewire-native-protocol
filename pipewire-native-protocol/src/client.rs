@@ -6,19 +6,19 @@ use spa::{
 use spa_derive::{ PodDeserialize, PodSerialize};
 use tokio::io;
 
-use crate::{InnerConnection};
+use crate::{PipewireWriter};
 
 
 // Proxy
 pub struct ClientProxy {
-    connection: Arc<Mutex<InnerConnection>>,
-    event_receiver: std::sync::mpsc::Receiver<ClientEvent>
+    connection: Arc<Mutex<PipewireWriter>>,
+    event_receiver: tokio::sync::mpsc::Receiver<ClientEvent>
 }
 
 impl ClientProxy {
     pub const CLIENT_ID: i32 = 1;
 
-    pub(crate) fn new(connection: Arc<Mutex<InnerConnection>>, event_receiver: std::sync::mpsc::Receiver<ClientEvent>) -> ClientProxy{
+    pub(crate) fn new(connection: Arc<Mutex<PipewireWriter>>, event_receiver: tokio::sync::mpsc::Receiver<ClientEvent>) -> ClientProxy{
         ClientProxy {connection, event_receiver }
     }
 
