@@ -14,3 +14,4 @@ spa = { path = "../spa"}
 spa_derive = { path = "../spa_derive"}
 tokio-util = { version = "0.7.13", features = ["codec"] }
 tokio-stream = "0.1.17"
+thiserror = "2.0.11"

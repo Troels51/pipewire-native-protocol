@@ -1,7 +1,8 @@
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{collections::HashMap, ops::{Deref, DerefMut}, sync::Arc};
 
 use spa::{deserialize::{DeserializeError, PodDeserializer}, opcode::{self, MessageOpCode}, serialize::PodSerializer};
 use spa_derive::{opcode, PodDeserialize, PodSerialize};
+use tokio::sync::Mutex;
 
 use crate::{PipewireWriter};
 
@@ -15,6 +16,20 @@ impl RegistryProxy {
     pub(crate) const VERSION: i32 = 3; // Version of the registry interface used
     pub(crate) fn new(id: i32, connection: Arc<Mutex<PipewireWriter>>, event_receiver: tokio::sync::mpsc::Receiver<RegistryEvent>) -> RegistryProxy{
         RegistryProxy {id, connection, event_receiver }
+    }
+}
+
+impl Deref for RegistryProxy {
+    type Target = tokio::sync::mpsc::Receiver<RegistryEvent>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.event_receiver
+    }
+}
+
+impl DerefMut for RegistryProxy {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.event_receiver
     }
 }
 

@@ -10,11 +10,12 @@ pub mod node;
 pub mod port;
 pub mod profiler;
 pub mod registry;
+mod error;
 
 use std::{
     collections::HashMap,
     io::Cursor,
-    sync::{Arc, Mutex},
+    sync::{Arc},
 };
 
 use client::{ClientEvent, ClientProxy};
@@ -34,7 +35,7 @@ use spa::{
     opcode::DeserializeFromOpCode,
     serialize::{PodSerialize, PodSerializer},
 };
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use tokio::{io::{self, AsyncReadExt, AsyncWriteExt}, sync::Mutex};
 use zerocopy::{FromBytes, FromZeros, Immutable, IntoBytes};
 
 use tokio_stream::StreamExt;
@@ -119,13 +120,9 @@ async fn run_reader(mut reader: PipewireReader) {
     while let Some(msg) = reader.stream.next().await {
         match msg {
             Ok(msg) => {
-                match reader.get_event_from_bytes(msg) {
-                    Ok(event) => match event {
-                        Event::Core(core_event) => {dbg!(core_event);},
-                        Event::Registry(registry_event) => {dbg!(registry_event);},
-                        Event::Client(client_event) => {dbg!(client_event);},
-                    },
+                match reader.handle_message_frame(msg).await {
                     Err(e) => {dbg!(e);},
+                    Ok(_) => (),
                 }
             },
             Err(e) => {
@@ -151,21 +148,13 @@ impl PipewireConnection {
     }
     pub async fn create_core_proxy(&mut self) -> io::Result<core_proxy::CoreProxy> {
         let (sender, receiver) = tokio::sync::mpsc::channel(8);
-        let _ = self
-            .reader
-            .sender
-            .send(PipewireReaderMessage::SetCoreProxy(sender))
-            .await;
+        self.proxies.lock().await.core_proxy = Some(sender);
         core_proxy::CoreProxy::new(self.writer.clone(), receiver, self.proxies.clone()).await
     }
 
     pub async fn create_client_proxy(&mut self) -> client::ClientProxy {
         let (sender, receiver) = tokio::sync::mpsc::channel(8);
-        let _ = self
-            .reader
-            .sender
-            .send(PipewireReaderMessage::SetClientProxy(sender))
-            .await;
+        self.proxies.lock().await.client_proxy = Some(sender);
         client::ClientProxy::new(self.writer.clone(), receiver)
     }
 }
@@ -201,6 +190,7 @@ impl PipewireWriter {
     }
 }
 
+
 impl PipewireReader {
     fn new(
         input_stream: tokio::net::unix::OwnedReadHalf,
@@ -222,64 +212,78 @@ impl PipewireReader {
         }
     }
 
-    fn get_event_from_bytes(&self, bytes: BytesMut) -> Result<Event, DeserializeError<&[u8]>> {
+    async fn handle_message_frame(&self, bytes: BytesMut) -> Result<(), error::PipewireConnectionError> {
         match bytes.split_first_chunk::<16>() {
             Some((header_bytes, message_bytes)) => {
                 let header = Header::read_from_bytes(header_bytes)
                     .expect("Length of byte slice must be equal to header size");
-                let message =
-                    self.deserialize_from_id_and_opcode(header.id, header.opcode(), message_bytes);
-                match message {
-                    Ok((remain, event)) => Ok(event),
-                    Err(e) => {
-                        dbg!(e);
-                        Err(DeserializeError::InvalidType)
+                match header.id {
+                    core_proxy::CORE_ID => {
+                        let (remain, event) =
+                            core_proxy::CoreEvent::deserialize_from_opcode(header.opcode(), message_bytes)?;
+                        dbg!(&event);
+
+                        match &self.proxies.lock().await.core_proxy {
+                            Some(core_proxy) => {
+                                match core_proxy.send(event).await {
+                                    Ok(o) => return Ok(o),
+                                    Err(e) => {
+                                        self.proxies.lock().await.core_proxy = None; // We could not send to core proxy, so remove it
+                                        return Err(error::PipewireConnectionError::ProxyNotPresentError(header.id));
+                                    },
+                                };
+                            },
+                            None => Ok(()),
+                        }
+                    }
+                    client::ClientProxy::CLIENT_ID => {
+                        let (remain, event) =
+                            client::ClientEvent::deserialize_from_opcode(header.opcode(), message_bytes)?;
+                        match &self.proxies.lock().await.client_proxy {
+                            Some(client_proxy) => {
+                                match client_proxy.send(event).await {
+                                    Ok(o) => return Ok(o),
+                                    Err(e) => {
+                                        self.proxies.lock().await.client_proxy = None; // We could not send to client proxy, so remove it
+                                        return Err(error::PipewireConnectionError::ProxyNotPresentError(header.id));
+                                    },
+                                };
+                            },
+                            None => Ok(()),
+                        }
+                    }
+                    id => {
+                        if self
+                            .proxies
+                            .lock()
+                            .await
+                            .registry_proxies
+                            .contains_key(&id)
+                        {
+                            let (remain, event) =
+                                registry::RegistryEvent::deserialize_from_opcode(header.opcode(), message_bytes)?;
+                            let mut registry_proxies = self.proxies.lock().await.registry_proxies.clone();
+                                let registry_proxy = registry_proxies.get(&id).unwrap();
+                                match registry_proxy.send(event).await {
+                                    Ok(o) => return Ok(o),
+                                    Err(e) => {
+                                        registry_proxies.remove(&id); // We could not send to proxy, so remove it
+                                        return Err(error::PipewireConnectionError::ProxyNotPresentError(header.id));
+                                    },
+                                };
+                        } else {
+                            println!("Could not find id {} ", id);
+                            return Err(error::PipewireConnectionError::ProxyNotPresentError(header.id));
+                        }
                     }
                 }
             }
             None => {
-                Err(DeserializeError::UnsupportedType) //TODO: Not corret err
+                Err(error::PipewireConnectionError::Unknown) //TODO: Not corret err
             }
         }
     }
 
-    fn deserialize_from_id_and_opcode<'a>(
-        &self,
-        id: i32,
-        opcode: u32,
-        buffer: &'a [u8],
-    ) -> Result<(&'a [u8], Event), spa::deserialize::DeserializeError<&'a [u8]>>
-    where
-        Self: Sized,
-    {
-        match id {
-            core_proxy::CORE_ID => {
-                let (remain, value) =
-                    core_proxy::CoreEvent::deserialize_from_opcode(opcode, buffer)?;
-                Ok((remain, Event::Core(value)))
-            }
-            client::ClientProxy::CLIENT_ID => {
-                let (remain, value) = client::ClientEvent::deserialize_from_opcode(opcode, buffer)?;
-                Ok((remain, Event::Client(value)))
-            }
-            id => {
-                if self
-                    .proxies
-                    .lock()
-                    .unwrap()
-                    .registry_proxies
-                    .contains_key(&id)
-                {
-                    let (remain, value) =
-                        registry::RegistryEvent::deserialize_from_opcode(opcode, buffer)?;
-                    Ok((remain, Event::Registry(value)))
-                } else {
-                    println!("Could not find id {} ", id);
-                    Err(DeserializeError::InvalidType)
-                }
-            }
-        }
-    }
 }
 
 #[derive(IntoBytes, FromBytes, Immutable, Debug)]

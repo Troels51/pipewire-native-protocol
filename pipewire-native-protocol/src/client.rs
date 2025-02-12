@@ -1,10 +1,10 @@
-use std::{ collections::HashMap, sync::{Arc, Mutex}};
+use std::{ collections::HashMap, ops::{Deref, DerefMut}, sync::Arc};
 
 use spa::{
     deserialize::{DeserializeError, PodDeserializer}, opcode::{self, MessageOpCode}, serialize::PodSerializer
 };
 use spa_derive::{ PodDeserialize, PodSerialize};
-use tokio::io;
+use tokio::{io, sync::Mutex};
 
 use crate::{PipewireWriter};
 
@@ -23,7 +23,7 @@ impl ClientProxy {
     }
 
     pub async fn update_properties(&self) -> io::Result<()> {
-        self.connection.lock().unwrap().call_method(
+        self.connection.lock().await.call_method(
             ClientProxy::CLIENT_ID,
             2,
             UpdateProperties {
@@ -31,6 +31,19 @@ impl ClientProxy {
             },
         )
         .await
+    }
+}
+
+impl Deref for ClientProxy {
+    type Target = tokio::sync::mpsc::Receiver<ClientEvent>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.event_receiver
+    }
+}
+impl DerefMut for ClientProxy {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.event_receiver
     }
 }
 

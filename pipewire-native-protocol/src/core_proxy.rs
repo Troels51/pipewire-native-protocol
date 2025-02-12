@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, io::Error, sync::{Arc, Mutex}
+    collections::HashMap, io::Error, ops::{Deref, DerefMut}, sync::Arc
 };
 
 use spa::{
@@ -9,6 +9,7 @@ use spa::{
     value::{Fd, Id},
 };
 use spa_derive::{PodDeserialize, PodSerialize};
+use tokio::sync::Mutex;
 
 use crate::{
     registry::{self, RegistryProxy},
@@ -41,25 +42,25 @@ impl CoreProxy {
     async fn hello(&mut self) -> Result<(), std::io::Error> {
         self.connection
             .lock()
-            .unwrap()
+            .await
             .call_method(CORE_ID, Hello::OP_CODE, Hello { version: 3 })
             .await
     }
 
     pub async fn sync(&mut self, id: i32) ->Result<(), std::io::Error>
     {
-        self.connection.lock().unwrap().call_method(CORE_ID, Sync::OP_CODE, Sync {
-            id: 1,
+        self.connection.lock().await.call_method(CORE_ID, Sync::OP_CODE, Sync {
+            id: id,
             seq: id,
         }).await
     }
 
     pub async fn get_registry(&mut self) -> std::io::Result<RegistryProxy> {
-        let mut connection = self.connection.lock().unwrap();
-        let mut proxies = self.proxies.lock().unwrap();
+        let mut connection = self.connection.lock().await;
+        let mut proxies = self.proxies.lock().await;
         proxies.id_counter = proxies.id_counter + 1;
         let id = proxies.id_counter;
-        let (sender, receiver) = tokio::sync::mpsc::channel(8);
+        let (sender, receiver) = tokio::sync::mpsc::channel(100);
         proxies.registry_proxies.insert(id, sender);
         connection
             .call_method(
@@ -76,6 +77,18 @@ impl CoreProxy {
             self.connection.clone(),
             receiver,
         ))
+    }
+}
+impl Deref for CoreProxy {
+    type Target = tokio::sync::mpsc::Receiver<CoreEvent>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.event_channel
+    }
+}
+impl DerefMut for CoreProxy {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.event_channel
     }
 }
 
