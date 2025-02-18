@@ -6,7 +6,7 @@ use spa::{
 use spa_derive::{ PodDeserialize, PodSerialize};
 use tokio::{io, sync::Mutex};
 
-use crate::{PipewireWriter};
+use crate::{core_proxy, PipewireWriter};
 
 
 // Proxy
@@ -18,16 +18,18 @@ pub struct ClientProxy {
 impl ClientProxy {
     pub const CLIENT_ID: i32 = 1;
 
-    pub(crate) fn new(connection: Arc<Mutex<PipewireWriter>>, event_receiver: tokio::sync::mpsc::Receiver<ClientEvent>) -> ClientProxy{
-        ClientProxy {connection, event_receiver }
+    pub(crate) async fn new(connection: Arc<Mutex<PipewireWriter>>, event_receiver: tokio::sync::mpsc::Receiver<ClientEvent>, properties: HashMap<String, String>) -> io::Result<ClientProxy>{
+        let mut  client = ClientProxy {connection, event_receiver };
+        client.update_properties(properties).await?;
+        Ok(client)
     }
 
-    pub async fn update_properties(&self) -> io::Result<()> {
+    pub async fn update_properties(&self, properties: HashMap<String, String>) -> io::Result<()> {
         self.connection.lock().await.call_method(
             ClientProxy::CLIENT_ID,
             2,
             UpdateProperties {
-                props: HashMap::from([("application.name".into(), "pipewirersssss".into())]),
+                props: properties,
             },
         )
         .await
@@ -81,6 +83,8 @@ pub struct UpdatePermissions {
 pub enum ClientEvent {
     Info(Info),
     Permissions(Permissions),
+    // Added to allow for receiving Done events on all proxies
+    Done(core_proxy::Done)
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]

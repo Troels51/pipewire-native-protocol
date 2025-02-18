@@ -2,6 +2,8 @@ use std::{env, io::Write};
 
 use clap::Parser;
 use clap::Subcommand;
+use pipewire_native_protocol::proxy::Proxy;
+use pipewire_native_protocol::registry::RegistryEvent;
 use pipewire_native_protocol::PipewireConnection;
 
 #[derive(Debug, Parser)]
@@ -15,7 +17,6 @@ struct Cli {
 enum Commands {
     Ping,
     Ls,
-    Sync,
     Exit,
 }
 
@@ -31,13 +32,10 @@ async fn main() -> tokio::io::Result<()> {
     }
     let address = address.expect("Could not find pipewire socket");
     let stream = tokio::net::UnixStream::connect(address).await?;
-    let mut connection = PipewireConnection::connect(stream).await?;
-    let mut core_proxy = connection.create_core_proxy().await?;
-    let client_proxy = connection.create_client_proxy().await;
-    let mut registry = core_proxy.get_registry().await?;
-    // let registry = core_proxy.sync(5).await;
+    let  (mut core_proxy, mut client_proxy) = PipewireConnection::connect(stream).await?;
 
-    client_proxy.update_properties().await?;
+    let mut registry = core_proxy.get_registry().await?;
+
     // Start repl
     loop {
         let line = readline();
@@ -53,23 +51,19 @@ async fn main() -> tokio::io::Result<()> {
                             Commands::Ping => {
                                 repl_write("Pong");
                             }
-                            Commands::Sync => {
-                                core_proxy.sync(0).await?;
-
-                                // while let Some(event) = core_proxy.recv().await {
-                                //     println!("{:?}", event);
-                                // }
-                                repl_write("sync");
-                            }
                             Commands::Exit => {
                                 repl_write("Exiting ....");
                                 return Ok(());
                             }
                             Commands::Ls => {
+                                registry.sync().await?;
                                 while let Some(event) = registry.recv().await {
-                                    println!("{:?}", event);
+                                    // TODO: Store the globals we receive, so that next time around we just look at what came untill the next done event
+                                    match event {
+                                        RegistryEvent::Done(done) => break,
+                                        _ => {println!("{}", event);}
+                                    }
                                 }
-                                repl_write("testing");
                             },
                         }
                     } else {

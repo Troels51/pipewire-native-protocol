@@ -49,29 +49,36 @@ impl CoreProxy {
 
     pub async fn sync(&mut self, id: i32) ->Result<(), std::io::Error>
     {
-        self.connection.lock().await.call_method(CORE_ID, Sync::OP_CODE, Sync {
+        let mut connection = self.connection.lock().await;
+        let seq = connection.seq + 1;
+        connection.call_method(CORE_ID, Sync::OP_CODE, Sync {
             id: id,
-            seq: id,
+            seq: seq,
         }).await
     }
 
     pub async fn get_registry(&mut self) -> std::io::Result<RegistryProxy> {
-        let mut connection = self.connection.lock().await;
-        let mut proxies = self.proxies.lock().await;
-        proxies.id_counter = proxies.id_counter + 1;
-        let id = proxies.id_counter;
+        let mut id = 0;
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
-        proxies.registry_proxies.insert(id, sender);
-        connection
-            .call_method(
-                CORE_ID,
-                GetRegistry::OP_CODE,
-                GetRegistry {
-                    version: RegistryProxy::VERSION,
-                    new_id: id,
-                },
-            )
-            .await?;
+
+        {
+            let mut connection = self.connection.lock().await;
+            let mut proxies = self.proxies.lock().await;
+            proxies.id_counter = proxies.id_counter + 1;
+            id = proxies.id_counter;
+            proxies.registry_proxies.insert(id, sender);
+            connection
+                .call_method(
+                    CORE_ID,
+                    GetRegistry::OP_CODE,
+                    GetRegistry {
+                        version: RegistryProxy::VERSION,
+                        new_id: id,
+                    },
+                )
+                .await?;
+        }
+
         Ok(registry::RegistryProxy::new(
             id,
             self.connection.clone(),
@@ -148,7 +155,7 @@ pub struct Destroy {
     pub id: i32,
 }
 // ==== pub Corepub ::Events ====
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CoreEvent {
     Info(Info),
     Done(Done),
@@ -213,7 +220,7 @@ impl spa::opcode::DeserializeFromOpCode for CoreEvent {
     }
 }
 
-#[derive(PodSerialize, PodDeserialize, Debug)]
+#[derive(PodSerialize, PodDeserialize, Debug, Clone)]
 #[spa_derive::opcode(0)]
 pub struct Info {
     pub id: i32,
@@ -226,14 +233,14 @@ pub struct Info {
     pub props: HashMap<String, String>,
 }
 
-#[derive(PodSerialize, PodDeserialize, Debug)]
+#[derive(PodSerialize, PodDeserialize, Debug, Clone)]
 #[spa_derive::opcode(1)]
 pub struct Done {
     pub id: i32,
     pub seq: i32,
 }
 
-#[derive(PodSerialize, PodDeserialize, Debug)]
+#[derive(PodSerialize, PodDeserialize, Debug, Clone)]
 #[spa_derive::opcode(2)]
 pub struct Ping {
     pub id: i32,
@@ -241,7 +248,7 @@ pub struct Ping {
 }
 
 // There is both an event and a error method, they are the same except the opcode
-#[derive(PodSerialize, PodDeserialize, Debug)]
+#[derive(PodSerialize, PodDeserialize, Debug, Clone)]
 #[spa_derive::opcode(3)]
 pub struct ErrorEvent {
     pub id: i32,
@@ -250,20 +257,20 @@ pub struct ErrorEvent {
     pub message: String,
 }
 
-#[derive(PodSerialize, PodDeserialize, Debug)]
+#[derive(PodSerialize, PodDeserialize, Debug, Clone)]
 #[spa_derive::opcode(4)]
 pub struct RemoveId {
     pub id: i32,
 }
 
-#[derive(PodSerialize, PodDeserialize, Debug)]
+#[derive(PodSerialize, PodDeserialize, Debug, Clone)]
 #[spa_derive::opcode(5)]
 pub struct BoundId {
     pub id: i32,
     pub global_id: i32,
 }
 
-#[derive(PodSerialize, PodDeserialize, Debug)]
+#[derive(PodSerialize, PodDeserialize, Debug, Clone)]
 #[spa_derive::opcode(6)]
 pub struct AddMem {
     pub id: i32,
@@ -272,12 +279,12 @@ pub struct AddMem {
     pub flags: i32,
 }
 
-#[derive(PodSerialize, PodDeserialize, Debug)]
+#[derive(PodSerialize, PodDeserialize, Debug, Clone)]
 #[spa_derive::opcode(7)]
 pub struct RemoveMem {
     pub id: i32,
 }
-#[derive(PodSerialize, PodDeserialize, Debug)]
+#[derive(PodSerialize, PodDeserialize, Debug, Clone)]
 #[spa_derive::opcode(8)]
 pub struct BoundProps {
     pub id: i32,

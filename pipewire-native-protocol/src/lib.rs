@@ -2,6 +2,7 @@ pub mod client;
 pub mod client_node;
 pub mod core_proxy;
 pub mod device;
+mod error;
 pub mod factory;
 pub mod link;
 pub mod metadata;
@@ -9,18 +10,14 @@ pub mod module;
 pub mod node;
 pub mod port;
 pub mod profiler;
+pub mod proxy;
 pub mod registry;
-mod error;
 
-use std::{
-    collections::HashMap,
-    io::Cursor,
-    sync::{Arc},
-};
+use std::{collections::HashMap, io::Cursor, sync::Arc};
 
 use client::{ClientEvent, ClientProxy};
 use client_node::ClientNodeEvent;
-use core_proxy::{CoreEvent, Ping};
+use core_proxy::{CoreEvent, Done, Ping};
 use device::DeviceEvent;
 use factory::FactoryEvent;
 use link::LinkEvent;
@@ -35,7 +32,10 @@ use spa::{
     opcode::DeserializeFromOpCode,
     serialize::{PodSerialize, PodSerializer},
 };
-use tokio::{io::{self, AsyncReadExt, AsyncWriteExt}, sync::Mutex};
+use tokio::{
+    io::{self, AsyncReadExt, AsyncWriteExt},
+    sync::Mutex,
+};
 use zerocopy::{FromBytes, FromZeros, Immutable, IntoBytes};
 
 use tokio_stream::StreamExt;
@@ -50,13 +50,10 @@ pub struct PipewireConnection {
 }
 pub(crate) struct PipewireWriter {
     stream: tokio::net::unix::OwnedWriteHalf,
-    seq: u32,
+    seq: i32,
 }
 
-enum PipewireReaderMessage {
-    SetCoreProxy(tokio::sync::mpsc::Sender<CoreEvent>),
-    SetClientProxy(tokio::sync::mpsc::Sender<ClientEvent>),
-}
+enum PipewireReaderMessage {}
 
 #[derive(Debug)]
 struct PipewireReader {
@@ -119,43 +116,49 @@ impl PipewireReaderHandle {
 async fn run_reader(mut reader: PipewireReader) {
     while let Some(msg) = reader.stream.next().await {
         match msg {
-            Ok(msg) => {
-                match reader.handle_message_frame(msg).await {
-                    Err(e) => {dbg!(e);},
-                    Ok(_) => (),
+            Ok(msg) => match reader.handle_message_frame(msg).await {
+                Err(e) => {
+                    dbg!(e);
                 }
+                Ok(_) => (),
             },
             Err(e) => {
                 println!("Error {}", e);
-            },
+            }
         }
     }
 }
 
 impl PipewireConnection {
-    pub async fn connect(stream: tokio::net::UnixStream) -> io::Result<Self> {
+    pub async fn connect(stream: tokio::net::UnixStream) -> io::Result<(core_proxy::CoreProxy, client::ClientProxy)> {
         let (input_stream, output_stream) = stream.into_split();
         let proxies = Arc::new(Mutex::new(Proxies::default()));
         let reader = PipewireReaderHandle::new(input_stream, proxies.clone());
         let writer = PipewireWriter::new(output_stream);
 
         let writer = Arc::new(Mutex::new(writer));
-        Ok(PipewireConnection {
+        let mut connection = PipewireConnection {
             writer: writer,
             reader: reader,
             proxies: proxies,
-        })
+        };
+        let core = connection.create_core_proxy().await?;
+        let props = HashMap::from([("application.name".into(), "pipewirers".into())]); // TODO: Add properties as argument
+        let client = connection.create_client_proxy(props).await?;
+        Ok((core,client ))
     }
+
+
     pub async fn create_core_proxy(&mut self) -> io::Result<core_proxy::CoreProxy> {
         let (sender, receiver) = tokio::sync::mpsc::channel(8);
         self.proxies.lock().await.core_proxy = Some(sender);
         core_proxy::CoreProxy::new(self.writer.clone(), receiver, self.proxies.clone()).await
     }
 
-    pub async fn create_client_proxy(&mut self) -> client::ClientProxy {
+    pub async fn create_client_proxy(&mut self, properties: HashMap<String, String>) -> io::Result<client::ClientProxy> {
         let (sender, receiver) = tokio::sync::mpsc::channel(8);
         self.proxies.lock().await.client_proxy = Some(sender);
-        client::ClientProxy::new(self.writer.clone(), receiver)
+        client::ClientProxy::new(self.writer.clone(), receiver, properties).await
     }
 }
 impl PipewireWriter {
@@ -190,7 +193,6 @@ impl PipewireWriter {
     }
 }
 
-
 impl PipewireReader {
     fn new(
         input_stream: tokio::net::unix::OwnedReadHalf,
@@ -212,16 +214,26 @@ impl PipewireReader {
         }
     }
 
-    async fn handle_message_frame(&self, bytes: BytesMut) -> Result<(), error::PipewireConnectionError> {
+    async fn handle_message_frame(
+        &self,
+        bytes: BytesMut,
+    ) -> Result<(), error::PipewireConnectionError> {
         match bytes.split_first_chunk::<16>() {
             Some((header_bytes, message_bytes)) => {
                 let header = Header::read_from_bytes(header_bytes)
                     .expect("Length of byte slice must be equal to header size");
                 match header.id {
                     core_proxy::CORE_ID => {
-                        let (remain, event) =
-                            core_proxy::CoreEvent::deserialize_from_opcode(header.opcode(), message_bytes)?;
-                        dbg!(&event);
+                        let (remain, event) = core_proxy::CoreEvent::deserialize_from_opcode(
+                            header.opcode(),
+                            message_bytes,
+                        )?;
+
+                        // We handle done events in a special way, by sending them to proxies corresponding to the id field inside
+                        // TODO: Not sure this is the best way, and should maybe be handled at another level
+                        if let CoreEvent::Done(done_event) = &event {
+                            self.send_done_to_proxy(done_event).await;
+                        }
 
                         match &self.proxies.lock().await.core_proxy {
                             Some(core_proxy) => {
@@ -229,51 +241,65 @@ impl PipewireReader {
                                     Ok(o) => return Ok(o),
                                     Err(e) => {
                                         self.proxies.lock().await.core_proxy = None; // We could not send to core proxy, so remove it
-                                        return Err(error::PipewireConnectionError::ProxyNotPresentError(header.id));
-                                    },
+                                        return Err(
+                                            error::PipewireConnectionError::ProxyNotPresentError(
+                                                header.id,
+                                            ),
+                                        );
+                                    }
                                 };
-                            },
+                            }
                             None => Ok(()),
                         }
                     }
                     client::ClientProxy::CLIENT_ID => {
-                        let (remain, event) =
-                            client::ClientEvent::deserialize_from_opcode(header.opcode(), message_bytes)?;
+                        let (remain, event) = client::ClientEvent::deserialize_from_opcode(
+                            header.opcode(),
+                            message_bytes,
+                        )?;
                         match &self.proxies.lock().await.client_proxy {
                             Some(client_proxy) => {
                                 match client_proxy.send(event).await {
                                     Ok(o) => return Ok(o),
                                     Err(e) => {
                                         self.proxies.lock().await.client_proxy = None; // We could not send to client proxy, so remove it
-                                        return Err(error::PipewireConnectionError::ProxyNotPresentError(header.id));
-                                    },
+                                        return Err(
+                                            error::PipewireConnectionError::ProxyNotPresentError(
+                                                header.id,
+                                            ),
+                                        );
+                                    }
                                 };
-                            },
+                            }
                             None => Ok(()),
                         }
                     }
                     id => {
-                        if self
-                            .proxies
-                            .lock()
-                            .await
-                            .registry_proxies
-                            .contains_key(&id)
-                        {
-                            let (remain, event) =
-                                registry::RegistryEvent::deserialize_from_opcode(header.opcode(), message_bytes)?;
-                            let mut registry_proxies = self.proxies.lock().await.registry_proxies.clone();
-                                let registry_proxy = registry_proxies.get(&id).unwrap();
-                                match registry_proxy.send(event).await {
-                                    Ok(o) => return Ok(o),
-                                    Err(e) => {
-                                        registry_proxies.remove(&id); // We could not send to proxy, so remove it
-                                        return Err(error::PipewireConnectionError::ProxyNotPresentError(header.id));
-                                    },
-                                };
+                        if self.proxies.lock().await.registry_proxies.contains_key(&id) {
+                            let (remain, event) = registry::RegistryEvent::deserialize_from_opcode(
+                                header.opcode(),
+                                message_bytes,
+                            )?;
+
+                            let mut registry_proxies =
+                                self.proxies.lock().await.registry_proxies.clone();
+                            let registry_proxy = registry_proxies.get(&id).unwrap();
+                            match registry_proxy.send(event).await {
+                                Ok(o) => return Ok(o),
+                                Err(e) => {
+                                    registry_proxies.remove(&id); // We could not send to proxy, so remove it
+                                    return Err(
+                                        error::PipewireConnectionError::ProxyNotPresentError(
+                                            header.id,
+                                        ),
+                                    );
+                                }
+                            };
                         } else {
                             println!("Could not find id {} ", id);
-                            return Err(error::PipewireConnectionError::ProxyNotPresentError(header.id));
+                            return Err(error::PipewireConnectionError::ProxyNotPresentError(
+                                header.id,
+                            ));
                         }
                     }
                 }
@@ -284,6 +310,26 @@ impl PipewireReader {
         }
     }
 
+    async fn send_done_to_proxy(&self, done_event: &Done) {
+        let id = done_event.id;
+        if id == ClientProxy::CLIENT_ID {
+            match &self.proxies.lock().await.client_proxy {
+                Some(client_proxy) => {
+                    let _ = client_proxy
+                        .send(ClientEvent::Done(done_event.clone()))
+                        .await;
+                }
+                None => (),
+            }
+        }
+        if self.proxies.lock().await.registry_proxies.contains_key(&id) {
+            let mut registry_proxies = self.proxies.lock().await.registry_proxies.clone();
+            let registry_proxy = registry_proxies.get(&id).unwrap();
+            let _ = registry_proxy
+                .send(RegistryEvent::Done(done_event.clone()))
+                .await;
+        }
+    }
 }
 
 #[derive(IntoBytes, FromBytes, Immutable, Debug)]
@@ -291,12 +337,12 @@ impl PipewireReader {
 struct Header {
     id: i32,
     opcode_size: u32,
-    seq: u32,
+    seq: i32,
     n_fds: u32,
 }
 
 impl Header {
-    fn new(id: i32, opcode: u32, size: u32, seq: u32, n_fds: u32) -> Self {
+    fn new(id: i32, opcode: u32, size: u32, seq: i32, n_fds: u32) -> Self {
         Self {
             id,
             opcode_size: size | (opcode << 24),
@@ -304,7 +350,7 @@ impl Header {
             n_fds,
         }
     }
-    fn incomplete(id: i32, opcode: u32, seq: u32) -> Self {
+    fn incomplete(id: i32, opcode: u32, seq: i32) -> Self {
         Self::new(id, opcode, 0, seq, 0)
     }
     fn size(&self) -> usize {
@@ -327,7 +373,7 @@ impl<T> Message<T>
 where
     T: PodSerialize,
 {
-    fn new(id: i32, opcode: u32, seq: u32, payload: T) -> Self {
+    fn new(id: i32, opcode: u32, seq: i32, payload: T) -> Self {
         Self {
             header: Header::incomplete(id, opcode, seq),
             payload,

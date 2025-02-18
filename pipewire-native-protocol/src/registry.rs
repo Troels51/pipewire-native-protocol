@@ -4,7 +4,7 @@ use spa::{deserialize::{DeserializeError, PodDeserializer}, opcode::{self, Messa
 use spa_derive::{opcode, PodDeserialize, PodSerialize};
 use tokio::sync::Mutex;
 
-use crate::{PipewireWriter};
+use crate::{ core_proxy, proxy::Proxy, PipewireWriter};
 
 pub struct RegistryProxy {
     id: i32,
@@ -16,6 +16,22 @@ impl RegistryProxy {
     pub(crate) const VERSION: i32 = 3; // Version of the registry interface used
     pub(crate) fn new(id: i32, connection: Arc<Mutex<PipewireWriter>>, event_receiver: tokio::sync::mpsc::Receiver<RegistryEvent>) -> RegistryProxy{
         RegistryProxy {id, connection, event_receiver }
+    }
+}
+
+impl Proxy for RegistryProxy {
+    type Event = RegistryEvent;
+
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn get_channel(&mut self) ->  &mut tokio::sync::mpsc::Receiver<Self::Event> {
+        &mut self.event_receiver
+    }
+
+    fn get_connection(&self) -> std::sync::Arc<tokio::sync::Mutex<crate::PipewireWriter>> {
+        self.connection.clone()
     }
 }
 
@@ -54,6 +70,8 @@ pub struct Destroy {
 pub enum RegistryEvent {
     Global(Global),
     GlobalRemove(GlobalRemove),
+    // Added to allow for receiving Done events on all proxies
+    Done(core_proxy::Done)
 }
 
 #[derive(PodSerialize, PodDeserialize, Debug)]
@@ -93,6 +111,22 @@ impl opcode::DeserializeFromOpCode for RegistryEvent {
                 Ok((remain, RegistryEvent::GlobalRemove(value)))
             }
             _ => Err(DeserializeError::InvalidType),
+        }
+    }
+}
+
+impl core::fmt::Display for RegistryEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RegistryEvent::Global(global) => {
+                write!(f, "Id {}, type {}\n", global.id, global.type_)?;
+                for (key, value) in global.props.iter() {
+                    write!(f, "\t{} {} \n", key, value)?;
+                }
+                write!(f, "")
+            },
+            RegistryEvent::GlobalRemove(global_remove) => Ok(()),
+            RegistryEvent::Done(done) => Ok(()),
         }
     }
 }
